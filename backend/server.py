@@ -55,6 +55,17 @@ bearer = HTTPBearer(auto_error=False)
 GOLD_PRIORITY = ["GA", "PGA", "HH_T", "CH_T", "PB", "B_T", "PC", "PY", "PT", "PA", "A_T", "PG", "PR"]
 CURRENCY_PRIORITY = ["USD", "EUR", "GBP", "CHF"]
 
+# Friendly, market-standard display names (override verbose provider descriptions).
+NAME_OVERRIDES = {
+    "USD": "Dolar", "EUR": "Euro", "GBP": "Sterlin", "CHF": "İsviçre Frangı",
+    "AUD": "Avustralya Doları", "CAD": "Kanada Doları", "SAR": "Suudi Riyali",
+    "JPY": "Japon Yeni", "DKK": "Danimarka Kronu", "SEK": "İsveç Kronu",
+    "NOK": "Norveç Kronu", "AED": "BAE Dirhemi", "KWD": "Kuveyt Dinarı",
+    "RUB": "Rus Rublesi", "CNY": "Çin Yuanı", "AZN": "Azerbaycan Manatı",
+    "BGN": "Bulgar Levası", "RON": "Rumen Leyi", "QAR": "Katar Riyali",
+    "ILS": "İsrail Şekeli", "IRR": "İran Riyali", "PKR": "Pakistan Rupisi",
+}
+
 
 def decimals_for(ptype: str) -> int:
     return 4 if ptype == 'currency' else 2
@@ -146,6 +157,7 @@ def ingest(items: list, ptype: str):
         if not code:
             continue
         name = str(it.get("Aciklama", "")).strip() or code
+        name = NAME_OVERRIDES.get(code, name)
         buy = parse_tr_number(it.get("Alis"))
         sell = parse_tr_number(it.get("Satis"))
         provider_ts = str(it.get("GuncellenmeZamani", "")).strip()
@@ -946,7 +958,7 @@ def _tr_three(n: int) -> str:
     h, rem = divmod(n, 100)
     parts = []
     if h:
-        parts.append(("" if h == 1 else _ONES[h]) + "yüz")
+        parts.append(("" if h == 1 else _ONES[h] + " ") + "yüz")
     t, o = divmod(rem, 10)
     if t:
         parts.append(_TENS[t])
@@ -976,14 +988,29 @@ def turkish_int_to_words(n: int) -> str:
     return " ".join(w for w in words if w).strip()
 
 
+def _spell_tr_decimals(decpart: str) -> str:
+    """Read the fractional part naturally: 2 significant digits as a whole number,
+    e.g. '2690' -> 'yirmi altı', '05' -> 'sıfır beş', '5' -> 'elli' (half)."""
+    d = decpart[:2]
+    if len(d) == 1:
+        d = d + "0"  # e.g. ',5' -> 50 -> 'elli'
+    if d == "00":
+        return ""
+    if d[0] == "0":
+        # leading zero: say "sıfır <ones>"
+        return "sıfır " + (turkish_int_to_words(int(d[1])) if d[1] != "0" else "sıfır")
+    return turkish_int_to_words(int(d))
+
+
 def _spell_tr_number(intpart: str, decpart: str) -> str:
     try:
         words = turkish_int_to_words(int(intpart or "0"))
     except ValueError:
         return (intpart + ("," + decpart if decpart else "")).strip()
     if decpart:
-        digs = " ".join(("sıfır" if d == "0" else _ONES[int(d)]) for d in decpart)
-        words += " virgül " + digs
+        dec_words = _spell_tr_decimals(decpart)
+        if dec_words:
+            words += " virgül " + dec_words
     return words
 
 
@@ -1028,8 +1055,14 @@ AI_PERSONA = (
     "Sen 'ONLİNE KUR' uygulamasının Türkçe konuşan altın ve döviz piyasası asistanısın. "
     "Kısa, net ve samimi yanıtlar ver. Yalnızca sana verilen güncel fiyat verilerine dayan; "
     "asla uydurma fiyat verme. Yatırım yorumu yaparken bunun kesin bir tavsiye olmadığını, "
-    "kişisel karar ve risk gerektirdiğini nazikçe hatırlat. Yanıtların sade Türkçe olsun ve "
-    "mobil ekrana uygun kısa paragraflar veya madde işaretleri şeklinde yazılsın."
+    "kişisel karar ve risk gerektirdiğini nazikçe hatırlat.\n\n"
+    "BİÇİM KURALLARI (çok önemli — cevabı temiz ve okunaklı bir şablon gibi ver):\n"
+    "- Yanıta tek satırlık kısa ve kalın bir başlıkla başla, ör: **Dolar Bugün** ya da **Piyasa Özeti**.\n"
+    "- Fiyat, rakam veya karşılaştırma varsa bunları alt alta madde işaretleriyle (her satır '- ' ile) yaz.\n"
+    "- Önemli değerleri **kalın** yaz (ör. **48,27 TL**). Ürün/varlık adlarını da kalınlaştırabilirsin.\n"
+    "- En fazla 5-6 madde kullan; gereksiz uzun paragraflardan kaçın.\n"
+    "- İstersen sonda tek cümlelik kısa bir değerlendirme/ipucu satırı ekleyebilirsin.\n"
+    "- Emoji kullanma veya en fazla başlıkta bir tane kullan."
 )
 
 

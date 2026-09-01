@@ -11,6 +11,7 @@ import { Sheet } from "@/src/components/Sheet";
 import { LineChart } from "@/src/components/LineChart";
 import { DonutChart } from "@/src/components/DonutChart";
 import { ShareCard } from "@/src/components/ShareCard";
+import { MarkdownLite } from "@/src/components/MarkdownLite";
 import { api } from "@/src/api/client";
 import { formatNumber, formatTL, parseTR } from "@/src/utils/format";
 import { useI18n } from "@/src/i18n";
@@ -462,7 +463,9 @@ export default function PortfolioScreen() {
             <Text style={{ color: colors.down, fontSize: 14, lineHeight: 21 }}>{adviceErr}</Text>
           ) : (
             <>
-              <Text testID="portfolio-advice-text" style={{ color: colors.text, fontSize: 14.5, lineHeight: 22 }}>{advice}</Text>
+              <View testID="portfolio-advice-text">
+                <MarkdownLite text={advice || ""} color={colors.text} accent={colors.gold} muted={colors.textSecondary} />
+              </View>
               <Text style={{ color: colors.textTertiary, fontSize: 11.5, marginTop: 14, lineHeight: 16 }}>
                 {t("pf.aiDisclaimer")}
               </Text>

@@ -12,6 +12,7 @@ import { useAlarms } from "@/src/context/AlarmsContext";
 import { api } from "@/src/api/client";
 import { getDeviceId } from "@/src/utils/device";
 import { useI18n } from "@/src/i18n";
+import { MarkdownLite } from "@/src/components/MarkdownLite";
 
 const ttsPlayer = createAudioPlayer();
 
@@ -216,9 +217,11 @@ export default function AssistantScreen() {
             : { alignSelf: "flex-start", backgroundColor: colors.card, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderBottomLeftRadius: 4 },
         ]}
       >
-        <Text style={{ color: isUser ? colors.onGold : colors.text, fontSize: 14.5, lineHeight: 21 }}>
-          {item.content}
-        </Text>
+        {isUser ? (
+          <Text style={{ color: colors.onGold, fontSize: 14.5, lineHeight: 21 }}>{item.content}</Text>
+        ) : (
+          <MarkdownLite text={item.content} color={colors.text} accent={colors.gold} muted={colors.textSecondary} />
+        )}
         {!isUser && (
           <Pressable
             testID={`ai-speak-${index}`}
