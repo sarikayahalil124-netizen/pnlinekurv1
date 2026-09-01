@@ -7,11 +7,13 @@ import { usePrices } from "@/src/context/PricesContext";
 import { Sheet } from "@/src/components/Sheet";
 import { SegmentedControl } from "@/src/components/SegmentedControl";
 import { formatNumber, formatTL, parseTR } from "@/src/utils/format";
+import { useI18n } from "@/src/i18n";
 
 export default function CalculatorScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { items } = usePrices();
+  const { t } = useI18n();
 
   const [calcMode, setCalcMode] = useState("tl"); // "tl" | "convert"
   const [amount, setAmount] = useState("");
@@ -52,7 +54,7 @@ export default function CalculatorScreen() {
 
   const BasisSelector = (
     <>
-      <Text style={[styles.label, { color: colors.textSecondary, marginTop: 20 }]}>Hesaplama Fiyatı</Text>
+      <Text style={[styles.label, { color: colors.textSecondary, marginTop: 20 }]}>{t("calc.priceLabel")}</Text>
       <View style={[styles.basisRow, { backgroundColor: colors.card2, borderColor: colors.border }]}>
         {(["buy", "sell"] as const).map((b) => (
           <Pressable
@@ -62,7 +64,7 @@ export default function CalculatorScreen() {
             style={[styles.basisBtn, basis === b && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}
           >
             <Text style={[styles.basisTxt, { color: basis === b ? colors.text : colors.textSecondary, fontWeight: basis === b ? "700" : "500" }]}>
-              {b === "buy" ? "Alış Fiyatı" : "Satış Fiyatı"}
+              {b === "buy" ? t("calc.buyPrice") : t("calc.sellPrice")}
             </Text>
           </Pressable>
         ))}
@@ -73,8 +75,8 @@ export default function CalculatorScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Hesapla</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>TL karşılığı ve ürünler arası çevirme</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t("calc.title")}</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t("calc.subtitle")}</Text>
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
@@ -83,13 +85,13 @@ export default function CalculatorScreen() {
             value={calcMode}
             onChange={setCalcMode}
             options={[
-              { label: "TL Karşılığı", value: "tl" },
-              { label: "Çevirici", value: "convert" },
+              { label: t("calc.tlMode"), value: "tl" },
+              { label: t("calc.convertMode"), value: "convert" },
             ]}
           />
 
           {/* Amount + from asset */}
-          <Text style={[styles.label, { color: colors.textSecondary, marginTop: 20 }]}>Miktar</Text>
+          <Text style={[styles.label, { color: colors.textSecondary, marginTop: 20 }]}>{t("calc.amount")}</Text>
           <View style={[styles.amountBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <TextInput
               testID="calc-amount"
@@ -115,7 +117,7 @@ export default function CalculatorScreen() {
                 <View style={[styles.swapLine, { backgroundColor: colors.border }]} />
               </View>
 
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Hedef Ürün</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t("calc.target")}</Text>
               <View style={[styles.amountBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Text style={[styles.convertPreview, { color: colors.textSecondary }]} numberOfLines={1}>
                   {convResult != null ? formatNumber(convResult, 4) : "—"}
@@ -131,7 +133,7 @@ export default function CalculatorScreen() {
           {/* Result */}
           {calcMode === "tl" ? (
             <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>TL Karşılığı</Text>
+              <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>{t("calc.tlResult")}</Text>
               <Text testID="calc-result" style={[styles.resultValue, { color: colors.text }]}>
                 {tlResult != null ? formatTL(tlResult, 2) : "—"}
               </Text>
@@ -144,7 +146,7 @@ export default function CalculatorScreen() {
           ) : (
             <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>
-                {toAsset ? `${toAsset.code} Karşılığı` : "Karşılığı"}
+                {toAsset ? t("calc.resultOf", { code: toAsset.code }) : t("calc.tlResult")}
               </Text>
               <Text testID="calc-convert-result" style={[styles.resultValue, { color: colors.text }]}>
                 {convResult != null ? `${formatNumber(convResult, 4)} ${toAsset?.code ?? ""}` : "—"}
@@ -159,7 +161,7 @@ export default function CalculatorScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Sheet visible={pickerFor !== null} onClose={() => setPickerFor(null)} title={pickerFor === "to" ? "Hedef Ürün Seçin" : "Ürün Seçin"}>
+      <Sheet visible={pickerFor !== null} onClose={() => setPickerFor(null)} title={pickerFor === "to" ? t("calc.selectTarget") : t("calc.selectProduct")}>
         <FlatList
           data={items}
           keyExtractor={(i) => i.code}

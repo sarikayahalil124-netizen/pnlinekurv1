@@ -12,6 +12,7 @@ import { ColumnsHeader } from "@/src/components/ColumnsHeader";
 import { FavoritesSummary } from "@/src/components/FavoritesSummary";
 import { SegmentedControl } from "@/src/components/SegmentedControl";
 import { formatTime } from "@/src/utils/format";
+import { useI18n } from "@/src/i18n";
 
 export default function MarketScreen() {
   const { colors } = useTheme();
@@ -19,6 +20,7 @@ export default function MarketScreen() {
   const router = useRouter();
   const { items, feedStatus, lastSuccess, loading, error, refresh } = usePrices();
   const { marketView, update } = useSettings();
+  const { t } = useI18n();
 
   const [filter, setFilter] = useState("currency");
   const [search, setSearch] = useState("");
@@ -45,7 +47,7 @@ export default function MarketScreen() {
   const feedColor =
     feedStatus === "guncel" ? colors.up : feedStatus === "gecikmeli" ? colors.warning : colors.down;
   const feedLabel =
-    feedStatus === "guncel" ? "Canlı" : feedStatus === "gecikmeli" ? "Gecikmeli" : "Veri Güncellenemiyor";
+    feedStatus === "guncel" ? t("market.live") : feedStatus === "gecikmeli" ? t("market.delayed") : t("market.noFeed");
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -54,7 +56,7 @@ export default function MarketScreen() {
         <View style={styles.titleRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.title, { color: colors.text }]}>ONLİNE KUR</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Altın & Döviz Piyasaları</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t("market.subtitle")}</Text>
           </View>
           <View style={{ alignItems: "flex-end", gap: 4 }}>
             <View style={styles.feedBox}>
@@ -82,7 +84,7 @@ export default function MarketScreen() {
               testID="market-search"
               value={search}
               onChangeText={setSearch}
-              placeholder="Ürün ara..."
+              placeholder={t("market.search")}
               placeholderTextColor={colors.textTertiary}
               style={[styles.searchInput, { color: colors.text }]}
               returnKeyType="search"
@@ -107,9 +109,9 @@ export default function MarketScreen() {
             value={filter}
             onChange={setFilter}
             options={[
-              { label: "Döviz", value: "currency" },
-              { label: "Altın", value: "gold" },
-              { label: "Tümü", value: "all" },
+              { label: t("market.currency"), value: "currency" },
+              { label: t("market.gold"), value: "gold" },
+              { label: t("market.all"), value: "all" },
             ]}
           />
         </View>
@@ -120,14 +122,14 @@ export default function MarketScreen() {
       {loading && items.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={[styles.centerTxt, { color: colors.textSecondary }]}>Piyasa verileri yükleniyor...</Text>
+          <Text style={[styles.centerTxt, { color: colors.textSecondary }]}>{t("market.loading")}</Text>
         </View>
       ) : error && items.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="cloud-offline-outline" size={44} color={colors.textTertiary} />
-          <Text style={[styles.centerTxt, { color: colors.text }]}>Sunucuya bağlanılamadı</Text>
+          <Text style={[styles.centerTxt, { color: colors.text }]}>{t("market.connError")}</Text>
           <Pressable testID="market-retry" onPress={onRefresh} style={[styles.retryBtn, { backgroundColor: colors.gold }]}>
-            <Text style={{ color: colors.onGold, fontWeight: "700" }}>Tekrar Dene</Text>
+            <Text style={{ color: colors.onGold, fontWeight: "700" }}>{t("common.retry")}</Text>
           </Pressable>
         </View>
       ) : (
@@ -151,7 +153,7 @@ export default function MarketScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={[styles.centerTxt, { color: colors.textSecondary }]}>Sonuç bulunamadı</Text>
+              <Text style={[styles.centerTxt, { color: colors.textSecondary }]}>{t("market.noResult")}</Text>
             </View>
           }
         />

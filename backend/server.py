@@ -268,6 +268,10 @@ async def poller_loop():
         except Exception as e:
             logger.error("poller error: %s", e)
         try:
+            await seed_history_if_needed()
+        except Exception as e:
+            logger.error("seed error: %s", e)
+        try:
             await check_alarms()
         except Exception as e:
             logger.error("alarm check error: %s", e)
@@ -466,6 +470,62 @@ async def day_opens() -> dict:
     ]
     rows = await db.price_history.aggregate(pipeline).to_list(2000)
     return {r["_id"]: r for r in rows}
+
+
+# ------------------------------------------------------------------ historical seed (one-time, past days only)
+_SEED_DONE = False
+
+
+async def seed_history_if_needed():
+    """Seed a smooth ~30-day historical price walk (past days only, before today 00:00 IST)
+    so chart ranges are meaningful on a fresh install. Never touches today's real data,
+    so daily % change / day high-low stay based on live prices. Runs at most once ever."""
+    global _SEED_DONE
+    if _SEED_DONE or not MARKET:
+        return
+    if await db.meta_flags.find_one({"_id": "history_seeded"}):
+        _SEED_DONE = True
+        return
+    import random
+    now_ist = datetime.now(IST_TZ)
+    today_start = now_ist.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    n_days, per_day = 30, 8
+    total = n_days * per_day
+    start = today_start - timedelta(days=n_days)
+    step = (today_start - start) / total
+    docs = []
+    for code, m in list(MARKET.items()):
+        try:
+            cur_sell = float(m["sell"])
+            cur_buy = float(m["buy"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if cur_sell <= 0:
+            continue
+        spread = max(cur_sell - cur_buy, cur_sell * 0.001)
+        dec = m.get("decimals", 2)
+        vals = [cur_sell]
+        v = cur_sell
+        for _ in range(total):
+            v = v / (1 + random.uniform(-0.011, 0.011))
+            vals.append(v)
+        vals.reverse()  # oldest -> newest
+        for i, sv in enumerate(vals):
+            ts = start + step * i
+            if ts >= today_start:
+                break
+            sell = round(sv, dec)
+            docs.append({
+                "code": code, "type": m["type"],
+                "buy": round(sv - spread, dec), "sell": sell,
+                "providerUpdatedAt": "seed", "ts": ts.isoformat(),
+            })
+    if docs:
+        await db.price_history.insert_many(docs)
+    await db.meta_flags.insert_one({"_id": "history_seeded", "at": datetime.now(timezone.utc).isoformat(),
+                                    "count": len(docs)})
+    _SEED_DONE = True
+    logger.info("Seeded %d historical price points across %d products", len(docs), len(MARKET))
 
 
 # ------------------------------------------------------------------ auth helpers
@@ -670,6 +730,41 @@ async def get_history(code: str, range_: str = Query("1G", alias="range")):
             "points": [{"buy": d["buy"], "sell": d["sell"], "ts": d["ts"]} for d in docs]}
 
 
+@api_router.get("/candles/{code}")
+async def get_candles(code: str, range_: str = Query("1G", alias="range")):
+    """OHLC candles aggregated from price_history + a moving-average comparison line."""
+    ranges_hours = {"1s": 1, "6s": 6, "12s": 12, "1G": 24, "1H": 168, "1A": 720}
+    hours = ranges_hours.get(range_, 24)
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    docs = await db.price_history.find({"code": code, "ts": {"$gte": since}}).sort("ts", 1).to_list(20000)
+    if len(docs) < 2:
+        return {"code": code, "range": range_, "candles": [], "ma": []}
+    n_buckets = 40
+    t_start = datetime.fromisoformat(docs[0]["ts"])
+    t_end = datetime.fromisoformat(docs[-1]["ts"])
+    span = (t_end - t_start).total_seconds() or 1.0
+    buckets: dict[int, dict] = {}
+    for d in docs:
+        t = datetime.fromisoformat(d["ts"])
+        idx = int((t - t_start).total_seconds() / span * (n_buckets - 1))
+        s = d["sell"]
+        b = buckets.get(idx)
+        if b is None:
+            buckets[idx] = {"o": s, "h": s, "l": s, "c": s, "ts": d["ts"]}
+        else:
+            b["h"] = max(b["h"], s)
+            b["l"] = min(b["l"], s)
+            b["c"] = s
+    candles = [buckets[i] for i in sorted(buckets.keys())]
+    closes = [c["c"] for c in candles]
+    w = max(2, min(6, len(closes) // 3 or 2))
+    ma = []
+    for i in range(len(closes)):
+        seg = closes[max(0, i - w + 1): i + 1]
+        ma.append(round(sum(seg) / len(seg), 6))
+    return {"code": code, "range": range_, "candles": candles, "ma": ma}
+
+
 # ------------------------------------------------------------------ auth endpoints
 class LoginRequest(BaseModel):
     email: str
@@ -841,13 +936,93 @@ TTS_DIR = Path(tempfile.gettempdir()) / "onlinekur_tts"
 TTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def clean_for_tts(text: str) -> str:
+# ---- Turkish number-to-words (for natural TTS pronunciation) ----
+_ONES = ["", "bir", "iki", "üç", "dört", "beş", "altı", "yedi", "sekiz", "dokuz"]
+_TENS = ["", "on", "yirmi", "otuz", "kırk", "elli", "altmış", "yetmiş", "seksen", "doksan"]
+_SCALE = ["", "bin", "milyon", "milyar", "trilyon"]
+
+
+def _tr_three(n: int) -> str:
+    h, rem = divmod(n, 100)
+    parts = []
+    if h:
+        parts.append(("" if h == 1 else _ONES[h]) + "yüz")
+    t, o = divmod(rem, 10)
+    if t:
+        parts.append(_TENS[t])
+    if o:
+        parts.append(_ONES[o])
+    return " ".join(parts)
+
+
+def turkish_int_to_words(n: int) -> str:
+    if n == 0:
+        return "sıfır"
+    if n < 0:
+        return "eksi " + turkish_int_to_words(-n)
+    groups = []
+    while n > 0:
+        n, r = divmod(n, 1000)
+        groups.append(r)
+    words = []
+    for i in range(len(groups) - 1, -1, -1):
+        g = groups[i]
+        if g == 0:
+            continue
+        if i == 1 and g == 1:
+            words.append("bin")
+        else:
+            words.append((_tr_three(g) + (" " + _SCALE[i] if i else "")).strip())
+    return " ".join(w for w in words if w).strip()
+
+
+def _spell_tr_number(intpart: str, decpart: str) -> str:
+    try:
+        words = turkish_int_to_words(int(intpart or "0"))
+    except ValueError:
+        return (intpart + ("," + decpart if decpart else "")).strip()
+    if decpart:
+        digs = " ".join(("sıfır" if d == "0" else _ONES[int(d)]) for d in decpart)
+        words += " virgül " + digs
+    return words
+
+
+_TR_NUM_RE = re.compile(r"\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?")
+
+
+def _tr_num_repl(m: "re.Match") -> str:
+    tok = m.group(0)
+    intp, decp = (tok.split(",", 1) + [""])[:2] if "," in tok else (tok, "")
+    intp = intp.replace(".", "")
+    return _spell_tr_number(intp, decp)
+
+
+def clean_for_tts(text: str, lang: str = "tr") -> str:
     text = re.sub(r"https?://\S+", "", text)
     text = re.sub(r"`{1,3}[^`]*`{1,3}", "", text)
     text = re.sub(r"[*_#>~|`]", "", text)
     # strip most emoji / pictographic symbols
     text = re.sub(r"[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF\u2190-\u21FF\u2B00-\u2BFF]", "", text)
+    if lang == "tr":
+        # Make numbers & symbols sound natural in professional Turkish speech.
+        text = text.replace("%", " yüzde ")
+        text = text.replace("₺", " lira ")
+        text = re.sub(r"\bTL\b", " lira ", text)
+        text = re.sub(r"\bUSD\b", " dolar ", text)
+        text = re.sub(r"\bEUR\b", " euro ", text)
+        text = _TR_NUM_RE.sub(_tr_num_repl, text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+LANG_NAME = {"tr": "Türkçe", "en": "English", "de": "Deutsch"}
+
+
+def lang_directive(lang: str) -> str:
+    if lang == "en":
+        return "\n\nIMPORTANT: Reply ONLY in fluent English, regardless of the language of the data above."
+    if lang == "de":
+        return "\n\nWICHTIG: Antworte AUSSCHLIESSLICH auf fließendem Deutsch, unabhängig von der Sprache der obigen Daten."
+    return "\n\nÖNEMLİ: Yalnızca akıcı ve profesyonel Türkçe ile yanıt ver."
 
 AI_PERSONA = (
     "Sen 'ONLİNE KUR' uygulamasının Türkçe konuşan altın ve döviz piyasası asistanısın. "
@@ -945,6 +1120,7 @@ async def _handle_alarm_directive(reply: str, device_id: str, catalog: dict):
 class AiChatBody(BaseModel):
     deviceId: str
     message: str
+    lang: str = "tr"
 
 
 @api_router.get("/ai/messages")
@@ -981,7 +1157,7 @@ async def ai_chat(body: AiChatBody):
         "code SADECE şu listeden olmalı: " + code_list + ". Kullanıcı alarm istemiyorsa bu komutu "
         "ASLA ekleme. Komutu kullanıcıya gösterme; ayrıca alarmın kurulduğunu doğal bir cümleyle söyle."
     )
-    system = AI_PERSONA + "\n\n" + snapshot + alarm_rules
+    system = AI_PERSONA + "\n\n" + snapshot + alarm_rules + lang_directive(body.lang)
     if transcript:
         system += "\n\nÖnceki konuşma:\n" + transcript
     chat = _ai_chat(system, f"chat-{body.deviceId}")
@@ -1033,16 +1209,17 @@ async def ai_transcribe(file: UploadFile = File(...)):
 
 class TtsBody(BaseModel):
     text: str
+    lang: str = "tr"
 
 
 @api_router.post("/ai/tts")
 async def ai_tts(body: TtsBody):
     if tts_client is None:
         raise HTTPException(503, "Seslendirme yapılandırılmamış")
-    text = clean_for_tts(body.text)[:4000]
+    text = clean_for_tts(body.text, body.lang)[:4000]
     if not text:
         raise HTTPException(400, "Seslendirilecek metin yok")
-    key = hashlib.sha256(f"{text}|{TTS_VOICE}|1.0|{TTS_MODEL}|mp3".encode()).hexdigest()
+    key = hashlib.sha256(f"{text}|{TTS_VOICE}|1.0|{TTS_MODEL}|mp3|{body.lang}".encode()).hexdigest()
     path = TTS_DIR / f"{key}.mp3"
     if not path.exists():
         try:
@@ -1070,10 +1247,14 @@ async def ai_tts_audio(key: str):
     )
 
 
+class CommentaryBody(BaseModel):
+    lang: str = "tr"
+
+
 @api_router.post("/ai/commentary")
-async def ai_commentary():
+async def ai_commentary(body: CommentaryBody = CommentaryBody()):
     snapshot = await market_snapshot_text()
-    chat = _ai_chat(AI_PERSONA, f"commentary-{int(time.time() // 300)}")
+    chat = _ai_chat(AI_PERSONA + lang_directive(body.lang), f"commentary-{int(time.time() // 300)}-{body.lang}")
     prompt = (
         "Aşağıdaki güncel verilere göre bugünkü altın ve döviz piyasasına dair kısa bir genel "
         "yorum yaz (en fazla 4-5 cümle veya madde). Öne çıkan yükseliş ve düşüşleri vurgula.\n\n"
@@ -1097,6 +1278,7 @@ class Holding(BaseModel):
 
 class PortfolioBody(BaseModel):
     holdings: list[Holding]
+    lang: str = "tr"
 
 
 @api_router.post("/ai/portfolio-advice")
@@ -1132,7 +1314,7 @@ async def ai_portfolio_advice(body: PortfolioBody):
             f"\nToplam maliyet: {fmt_tr(total_cost, 2)} TL · "
             f"Toplam K/Z: {fmt_tr(total_val - total_cost, 2)} TL"
         )
-    chat = _ai_chat(AI_PERSONA, f"advice-{int(time.time())}")
+    chat = _ai_chat(AI_PERSONA + lang_directive(body.lang), f"advice-{int(time.time())}")
     prompt = (
         "Kullanıcının portföyü aşağıda. Güncel piyasaya göre kısa bir değerlendirme yap: "
         "dağılımı yorumla, dikkat edilebilecek noktaları belirt ve genel bir öneri sun "

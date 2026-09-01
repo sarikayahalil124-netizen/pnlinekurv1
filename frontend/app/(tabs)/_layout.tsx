@@ -4,6 +4,7 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/src/theme/ThemeContext";
+import { useI18n } from "@/src/i18n";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -18,6 +19,7 @@ const ICONS: Record<string, { active: IconName; inactive: IconName }> = {
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const { t } = useI18n();
 
   return (
     <Tabs
@@ -44,12 +46,12 @@ export default function TabsLayout() {
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Piyasa" }} />
-      <Tabs.Screen name="favorites" options={{ title: "Favoriler" }} />
-      <Tabs.Screen name="portfolio" options={{ title: "Portföy" }} />
-      <Tabs.Screen name="calculator" options={{ title: "Hesapla" }} />
-      <Tabs.Screen name="alarms" options={{ title: "Alarmlar" }} />
-      <Tabs.Screen name="settings" options={{ title: "Ayarlar" }} />
+      <Tabs.Screen name="index" options={{ title: t("tab.market") }} />
+      <Tabs.Screen name="favorites" options={{ title: t("tab.favorites") }} />
+      <Tabs.Screen name="portfolio" options={{ title: t("tab.portfolio") }} />
+      <Tabs.Screen name="calculator" options={{ title: t("tab.calculator") }} />
+      <Tabs.Screen name="alarms" options={{ title: t("tab.alarms") }} />
+      <Tabs.Screen name="settings" options={{ title: t("tab.settings") }} />
     </Tabs>
   );
 }

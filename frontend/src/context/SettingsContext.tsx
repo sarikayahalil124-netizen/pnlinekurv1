@@ -7,9 +7,10 @@ export interface AppSettings {
   extraDecimals: boolean; // show one extra decimal place
   priceBasis: "sell" | "buy"; // default emphasis
   marketView: "list" | "card"; // market screen layout
+  language: "tr" | "en" | "de"; // UI language
 }
 
-const DEFAULT: AppSettings = { extraDecimals: false, priceBasis: "sell", marketView: "list" };
+const DEFAULT: AppSettings = { extraDecimals: false, priceBasis: "sell", marketView: "list", language: "tr" };
 
 interface SettingsCtx extends AppSettings {
   update: (patch: Partial<AppSettings>) => void;

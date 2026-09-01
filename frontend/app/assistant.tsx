@@ -11,6 +11,7 @@ import { useTheme } from "@/src/theme/ThemeContext";
 import { useAlarms } from "@/src/context/AlarmsContext";
 import { api } from "@/src/api/client";
 import { getDeviceId } from "@/src/utils/device";
+import { useI18n } from "@/src/i18n";
 
 const ttsPlayer = createAudioPlayer();
 
@@ -19,16 +20,17 @@ interface Msg {
   content: string;
 }
 
-const QUICK = [
-  { label: "Bugünkü piyasa yorumu", commentary: true },
-  { label: "Dolar bugün ne durumda?", commentary: false },
-  { label: "Altın mı döviz mi almalıyım?", commentary: false },
-];
-
 export default function AssistantScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t, lang } = useI18n();
+
+  const QUICK = [
+    { label: t("ai.q1"), commentary: true },
+    { label: t("ai.q2"), commentary: false },
+    { label: t("ai.q3"), commentary: false },
+  ];
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -66,7 +68,7 @@ export default function AssistantScreen() {
       }
       setTtsLoadingIdx(idx);
       try {
-        const { url } = await api.aiTts(text);
+        const { url } = await api.aiTts(text, lang);
         await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
         ttsPlayer.replace({ uri: url });
         ttsPlayer.play();
@@ -77,7 +79,7 @@ export default function AssistantScreen() {
         setTtsLoadingIdx(null);
       }
     },
-    [speakingIdx],
+    [speakingIdx, lang],
   );
 
   useEffect(() => {
@@ -105,7 +107,7 @@ export default function AssistantScreen() {
       scrollDown();
       try {
         const deviceId = await getDeviceId();
-        const r = await api.aiChat(deviceId, t);
+        const r = await api.aiChat(deviceId, t, lang);
         setMessages((prev) => {
           const next = [...prev, { role: "assistant" as const, content: r.reply }];
           if (autoSpeak && r.reply) {
@@ -122,7 +124,7 @@ export default function AssistantScreen() {
         scrollDown();
       }
     },
-    [sending, scrollDown, refreshAlarms, speak],
+    [sending, scrollDown, refreshAlarms, speak, lang],
   );
 
   const startRecording = useCallback(async () => {
@@ -180,11 +182,11 @@ export default function AssistantScreen() {
 
   const sendCommentary = useCallback(async () => {
     if (sending) return;
-    setMessages((prev) => [...prev, { role: "user", content: "Bugünkü piyasa yorumu" }]);
+    setMessages((prev) => [...prev, { role: "user", content: t("ai.q1") }]);
     setSending(true);
     scrollDown();
     try {
-      const r = await api.aiCommentary();
+      const r = await api.aiCommentary(lang);
       setMessages((prev) => [...prev, { role: "assistant", content: r.commentary }]);
     } catch (e: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: "⚠️ " + (e?.message || "Yorum alınamadı.") }]);
@@ -192,7 +194,7 @@ export default function AssistantScreen() {
       setSending(false);
       scrollDown();
     }
-  }, [sending, scrollDown]);
+  }, [sending, scrollDown, t, lang]);
 
   const clear = useCallback(async () => {
     setMessages([]);
@@ -230,7 +232,7 @@ export default function AssistantScreen() {
               <Ionicons name={speakingIdx === index ? "stop-circle" : "volume-high"} size={16} color={colors.gold} />
             )}
             <Text style={[styles.speakTxt, { color: colors.gold }]}>
-              {speakingIdx === index ? "Durdur" : "Sesli oku"}
+              {speakingIdx === index ? t("ai.stop") : t("ai.read")}
             </Text>
           </Pressable>
         )}
@@ -246,8 +248,8 @@ export default function AssistantScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.hTitle, { color: colors.text }]}>AI Danışman</Text>
-          <Text style={[styles.hSub, { color: colors.textSecondary }]}>Altın & döviz asistanınız</Text>
+          <Text style={[styles.hTitle, { color: colors.text }]}>{t("ai.title")}</Text>
+          <Text style={[styles.hSub, { color: colors.textSecondary }]}>{t("ai.subtitle")}</Text>
         </View>
         {messages.length > 0 && (
           <Pressable testID="assistant-clear" onPress={clear} hitSlop={10} style={styles.hBtn}>
@@ -270,9 +272,9 @@ export default function AssistantScreen() {
             <View style={[styles.heroIcon, { backgroundColor: colors.goldSoft }]}>
               <Ionicons name="sparkles" size={30} color={colors.gold} />
             </View>
-            <Text style={[styles.heroTitle, { color: colors.text }]}>Merhaba! 👋</Text>
+            <Text style={[styles.heroTitle, { color: colors.text }]}>{t("ai.greeting")}</Text>
             <Text style={[styles.heroTxt, { color: colors.textSecondary }]}>
-              Güncel altın ve döviz fiyatlarına göre size yardımcı olabilirim. Bir şey sorun ya da hızlı başlayın:
+              {t("ai.intro")}
             </Text>
             <View style={{ gap: 10, marginTop: 20, width: "100%" }}>
               {QUICK.map((q) => (
@@ -302,7 +304,7 @@ export default function AssistantScreen() {
               sending ? (
                 <View style={[styles.bubble, { alignSelf: "flex-start", backgroundColor: colors.card, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, flexDirection: "row", gap: 8, alignItems: "center" }]}>
                   <ActivityIndicator size="small" color={colors.gold} />
-                  <Text style={{ color: colors.textSecondary, fontSize: 13.5 }}>yazıyor...</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13.5 }}>{t("ai.typing")}</Text>
                 </View>
               ) : null
             }
@@ -327,7 +329,7 @@ export default function AssistantScreen() {
             testID="ai-input"
             value={input}
             onChangeText={setInput}
-            placeholder={recording ? "Dinliyorum..." : transcribing ? "Metne çevriliyor..." : "Bir soru yazın..."}
+            placeholder={recording ? t("ai.listening") : transcribing ? t("ai.transcribing") : t("ai.input")}
             placeholderTextColor={colors.textTertiary}
             editable={!recording && !transcribing}
             style={[styles.input, { backgroundColor: colors.card2, borderColor: colors.border, color: colors.text }]}

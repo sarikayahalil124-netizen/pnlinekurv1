@@ -8,8 +8,10 @@ import { useFavorites } from "@/src/context/FavoritesContext";
 import { useSettings } from "@/src/context/SettingsContext";
 import { api } from "@/src/api/client";
 import { LineChart } from "@/src/components/LineChart";
+import { CandleChart, Candle } from "@/src/components/CandleChart";
 import { StatusPill } from "@/src/components/StatusPill";
 import { formatNumber, providerTimeOnly } from "@/src/utils/format";
+import { useI18n } from "@/src/i18n";
 
 const RANGES = [
   { label: "1s", value: "1s" },
@@ -28,12 +30,15 @@ export default function ProductDetail() {
   const { width } = useWindowDimensions();
   const { isFavorite, toggle } = useFavorites();
   const { extraDecimals } = useSettings();
+  const { t } = useI18n();
 
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState("1G");
-  const [points, setPoints] = useState<number[]>([]);
+  const [candles, setCandles] = useState<Candle[]>([]);
+  const [ma, setMa] = useState<number[]>([]);
+  const [chartType, setChartType] = useState<"line" | "candle">("line");
   const [chartLoading, setChartLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -58,10 +63,12 @@ export default function ProductDetail() {
     (async () => {
       setChartLoading(true);
       try {
-        const h = await api.getHistory(String(code), range);
-        setPoints((h.points || []).map((p: any) => p.sell));
+        const h = await api.getCandles(String(code), range);
+        setCandles(h.candles || []);
+        setMa(h.ma || []);
       } catch {
-        setPoints([]);
+        setCandles([]);
+        setMa([]);
       } finally {
         setChartLoading(false);
       }
@@ -101,7 +108,7 @@ export default function ProductDetail() {
         {Header}
         <View style={styles.center}>
           <Ionicons name="alert-circle-outline" size={44} color={colors.textTertiary} />
-          <Text style={[styles.centerTxt, { color: colors.text }]}>Veri Yok</Text>
+          <Text style={[styles.centerTxt, { color: colors.text }]}>{t("product.noData")}</Text>
         </View>
       </View>
     );
@@ -128,44 +135,65 @@ export default function ProductDetail() {
           </View>
           <View style={styles.heroPrices}>
             <View>
-              <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>Alış</Text>
+              <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>{t("product.buy")}</Text>
               <Text style={[styles.heroValue, { color: colors.text }]}>{formatNumber(detail.buy, dec)}</Text>
             </View>
             <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>Satış</Text>
+              <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>{t("product.sell")}</Text>
               <Text style={[styles.heroValue, { color: colors.text }]}>{formatNumber(detail.sell, dec)}</Text>
             </View>
           </View>
           {detail.manual && (
             <View style={[styles.manualTag, { backgroundColor: colors.goldSoft }]}>
               <Ionicons name="create-outline" size={13} color={colors.gold} />
-              <Text style={[styles.manualTxt, { color: colors.gold }]}>Manuel Fiyat</Text>
+              <Text style={[styles.manualTxt, { color: colors.gold }]}>{t("product.manual")}</Text>
             </View>
           )}
         </View>
 
         {/* Intraday high / low */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>GÜN İÇİ</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t("product.intraday")}</Text>
         <View style={styles.dayRow}>
           <View style={[styles.dayBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.dayLabelRow}>
               <Ionicons name="trending-up" size={14} color={colors.up} />
-              <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>En Yüksek</Text>
+              <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>{t("product.high")}</Text>
             </View>
             <Text testID="day-high" style={[styles.dayValue, { color: colors.up }]}>{formatNumber(detail.dayHigh, dec)}</Text>
           </View>
           <View style={[styles.dayBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.dayLabelRow}>
               <Ionicons name="trending-down" size={14} color={colors.down} />
-              <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>En Düşük</Text>
+              <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>{t("product.low")}</Text>
             </View>
             <Text testID="day-low" style={[styles.dayValue, { color: colors.down }]}>{formatNumber(detail.dayLow, dec)}</Text>
           </View>
         </View>
 
         {/* Chart */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>FİYAT GRAFİĞİ</Text>
+        <View style={styles.chartHead}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>{t("product.chart")}</Text>
+          <View style={[styles.typeToggle, { backgroundColor: colors.card2, borderColor: colors.border }]}>
+            {(["line", "candle"] as const).map((tp) => (
+              <Pressable
+                key={tp}
+                testID={`chart-type-${tp}`}
+                onPress={() => setChartType(tp)}
+                style={[styles.typeBtn, chartType === tp && { backgroundColor: colors.gold }]}
+              >
+                <Ionicons
+                  name={tp === "line" ? "pulse" : "stats-chart"}
+                  size={13}
+                  color={chartType === tp ? colors.onGold : colors.textSecondary}
+                />
+                <Text style={{ color: chartType === tp ? colors.onGold : colors.textSecondary, fontWeight: "700", fontSize: 11.5 }}>
+                  {tp === "line" ? t("product.line") : t("product.candle")}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
         <View style={styles.rangeRow}>
           {RANGES.map((r) => (
             <Pressable
@@ -183,15 +211,25 @@ export default function ProductDetail() {
             <View style={styles.chartEmpty}>
               <ActivityIndicator color={colors.gold} />
             </View>
-          ) : points.length >= 2 ? (
+          ) : candles.length >= 2 ? (
             <>
-              <LineChart values={points} width={width - 64} height={160} />
+              {chartType === "candle" ? (
+                <CandleChart candles={candles} ma={ma} width={width - 64} height={160} />
+              ) : (
+                <LineChart values={candles.map((c) => c.c)} compare={ma} width={width - 64} height={160} />
+              )}
+              <View style={styles.legendRow}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDash, { backgroundColor: colors.gold }]} />
+                  <Text style={[styles.legendTxt, { color: colors.textSecondary }]}>{t("product.avgLine")}</Text>
+                </View>
+              </View>
               <View style={styles.chartCaption}>
                 <Text style={[styles.chartCapTxt, { color: colors.down }]}>
-                  En Düşük {formatNumber(Math.min(...points), dec)}
+                  {t("product.lowest")} {formatNumber(Math.min(...candles.map((c) => c.l)), dec)}
                 </Text>
                 <Text style={[styles.chartCapTxt, { color: colors.up }]}>
-                  En Yüksek {formatNumber(Math.max(...points), dec)}
+                  {t("product.highest")} {formatNumber(Math.max(...candles.map((c) => c.h)), dec)}
                 </Text>
               </View>
             </>
@@ -199,19 +237,19 @@ export default function ProductDetail() {
             <View style={styles.chartEmpty}>
               <Ionicons name="analytics-outline" size={32} color={colors.textTertiary} />
               <Text style={[styles.chartEmptyTxt, { color: colors.textSecondary }]}>
-                Bu zaman aralığı için yeterli geçmiş veri henüz oluşmadı.
+                {t("product.noHistory")}
               </Text>
             </View>
           )}
         </View>
 
         {/* Stats */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>DETAYLAR</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t("product.details")}</Text>
         <View style={styles.statsGrid}>
-          <Stat label="Piyasa Alış" value={formatNumber(detail.marketBuy, dec)} />
-          <Stat label="Piyasa Satış" value={formatNumber(detail.marketSell, dec)} />
-          <Stat label="Son Güncelleme" value={providerTimeOnly(detail.providerUpdatedAt)} />
-          <Stat label="Makas (Fark)" value={formatNumber(detail.sell - detail.buy, dec)} accent={colors.gold} />
+          <Stat label={t("product.marketBuy")} value={formatNumber(detail.marketBuy, dec)} />
+          <Stat label={t("product.marketSell")} value={formatNumber(detail.marketSell, dec)} />
+          <Stat label={t("product.lastUpdate")} value={providerTimeOnly(detail.providerUpdatedAt)} />
+          <Stat label={t("product.spread")} value={formatNumber(detail.sell - detail.buy, dec)} accent={colors.gold} />
         </View>
       </ScrollView>
     </View>
@@ -243,6 +281,13 @@ const styles = StyleSheet.create({
   dayValue: { fontSize: 19, fontWeight: "800", marginTop: 6, fontVariant: ["tabular-nums"], letterSpacing: -0.3 },
   chartCaption: { flexDirection: "row", justifyContent: "space-between", marginTop: 10, paddingHorizontal: 2 },
   chartCapTxt: { fontSize: 12, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  chartHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  typeToggle: { flexDirection: "row", borderRadius: 9, borderWidth: StyleSheet.hairlineWidth, padding: 2, gap: 2, marginTop: 24 },
+  typeBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 7 },
+  legendRow: { flexDirection: "row", marginTop: 10, paddingHorizontal: 2 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legendDash: { width: 16, height: 3, borderRadius: 2 },
+  legendTxt: { fontSize: 11.5, fontWeight: "600" },
   rangeRow: { flexDirection: "row", gap: 6, marginBottom: 10 },
   rangeBtn: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth },
   chartCard: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, minHeight: 180, justifyContent: "center" },

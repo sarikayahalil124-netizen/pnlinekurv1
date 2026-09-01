@@ -1,15 +1,19 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { captureRef } from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
 import { useTheme } from "@/src/theme/ThemeContext";
 import { usePrices } from "@/src/context/PricesContext";
 import { usePortfolio, Holding } from "@/src/context/PortfolioContext";
 import { Sheet } from "@/src/components/Sheet";
 import { LineChart } from "@/src/components/LineChart";
 import { DonutChart } from "@/src/components/DonutChart";
+import { ShareCard } from "@/src/components/ShareCard";
 import { api } from "@/src/api/client";
 import { formatNumber, formatTL, parseTR } from "@/src/utils/format";
+import { useI18n } from "@/src/i18n";
 
 export default function PortfolioScreen() {
   const { colors } = useTheme();
@@ -17,6 +21,9 @@ export default function PortfolioScreen() {
   const { width } = useWindowDimensions();
   const { items, byCode } = usePrices();
   const { holdings, history, add, update, remove, recordSnapshot } = usePortfolio();
+  const { t, lang } = useI18n();
+  const shareRef = useRef<View>(null);
+  const [sharing, setSharing] = useState(false);
 
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -142,14 +149,32 @@ export default function PortfolioScreen() {
         qty: h.qty,
         buyPrice: h.buyPrice,
       }));
-      const res = await api.aiPortfolioAdvice(body);
+      const res = await api.aiPortfolioAdvice(body, lang);
       setAdvice(res.advice);
     } catch (e: any) {
-      setAdviceErr(e?.message || "Değerlendirme alınamadı");
+      setAdviceErr(e?.message || t("pf.adviceErr"));
     } finally {
       setAdviceLoading(false);
     }
   };
+
+  const handleShare = useCallback(async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const uri = await captureRef(shareRef, { format: "png", quality: 1, result: "tmpfile" });
+      if (Platform.OS === "web") {
+        // Sharing files isn't supported on web preview; open the image instead.
+        window.open(uri, "_blank");
+      } else if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: t("pf.share") });
+      }
+    } catch {
+      // silent
+    } finally {
+      setSharing(false);
+    }
+  }, [sharing, t]);
 
   const plColor = (v: number | null) =>
     v == null ? colors.textSecondary : v > 0 ? colors.up : v < 0 ? colors.down : colors.textSecondary;
@@ -193,16 +218,16 @@ export default function PortfolioScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Portföy</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Varlıklarınız ve kâr/zarar</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t("pf.title")}</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t("pf.subtitle")}</Text>
       </View>
 
       {holdings.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="wallet-outline" size={48} color={colors.textTertiary} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Portföyünüz boş</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>{t("pf.emptyTitle")}</Text>
           <Text style={[styles.emptyTxt, { color: colors.textSecondary }]}>
-            Elinizdeki altın ve dövizi ekleyin; güncel değerini ve kâr/zararınızı anlık takip edin.
+            {t("pf.emptyTxt")}
           </Text>
         </View>
       ) : (
@@ -214,20 +239,20 @@ export default function PortfolioScreen() {
           ListHeaderComponent={
             <View>
             <View style={[styles.summary, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.sumLabel, { color: colors.textSecondary }]}>Toplam Güncel Değer</Text>
+              <Text style={[styles.sumLabel, { color: colors.textSecondary }]}>{t("pf.totalValue")}</Text>
               <Text testID="portfolio-total-value" style={[styles.sumValue, { color: colors.text }]}>
                 {formatTL(totals.value, 2)}
               </Text>
               <View style={styles.sumRow}>
                 {totals.cost != null && (
                   <View style={styles.sumCol}>
-                    <Text style={[styles.sumSmallLabel, { color: colors.textSecondary }]}>Maliyet</Text>
+                    <Text style={[styles.sumSmallLabel, { color: colors.textSecondary }]}>{t("pf.cost")}</Text>
                     <Text style={[styles.sumSmall, { color: colors.text }]}>{formatTL(totals.cost, 2)}</Text>
                   </View>
                 )}
                 {totals.pl != null && (
                   <View style={styles.sumCol}>
-                    <Text style={[styles.sumSmallLabel, { color: colors.textSecondary }]}>Kâr / Zarar</Text>
+                    <Text style={[styles.sumSmallLabel, { color: colors.textSecondary }]}>{t("pf.pl")}</Text>
                     <Text testID="portfolio-total-pl" style={[styles.sumSmall, { color: plColor(totals.pl) }]}>
                       {totals.pl >= 0 ? "+" : ""}
                       {formatNumber(totals.pl, 2)} ₺
@@ -236,20 +261,37 @@ export default function PortfolioScreen() {
                   </View>
                 )}
               </View>
-              <Pressable
-                testID="portfolio-ai-advice-btn"
-                onPress={getAdvice}
-                style={[styles.adviceBtn, { backgroundColor: colors.goldSoft, borderColor: colors.gold }]}
-              >
-                <Ionicons name="sparkles" size={16} color={colors.gold} />
-                <Text style={[styles.adviceBtnTxt, { color: colors.gold }]}>AI Değerlendirmesi Al</Text>
-              </Pressable>
+              <View style={styles.sumBtnRow}>
+                <Pressable
+                  testID="portfolio-ai-advice-btn"
+                  onPress={getAdvice}
+                  style={[styles.adviceBtn, { backgroundColor: colors.goldSoft, borderColor: colors.gold, flex: 1 }]}
+                >
+                  <Ionicons name="sparkles" size={16} color={colors.gold} />
+                  <Text style={[styles.adviceBtnTxt, { color: colors.gold }]}>{t("pf.aiAdvice")}</Text>
+                </Pressable>
+                <Pressable
+                  testID="portfolio-share-btn"
+                  onPress={handleShare}
+                  disabled={sharing}
+                  style={[styles.shareBtn, { backgroundColor: colors.gold }]}
+                >
+                  {sharing ? (
+                    <ActivityIndicator size="small" color={colors.onGold} />
+                  ) : (
+                    <>
+                      <Ionicons name="share-social" size={16} color={colors.onGold} />
+                      <Text style={[styles.adviceBtnTxt, { color: colors.onGold }]}>{t("pf.share")}</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
             </View>
 
             {chartValues.length >= 2 && (
               <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.chartTitle, { color: colors.text }]}>Değer Değişimi</Text>
-                <Text style={[styles.chartSub, { color: colors.textSecondary }]}>Son {chartValues.length} kayıt</Text>
+                <Text style={[styles.chartTitle, { color: colors.text }]}>{t("pf.valueChange")}</Text>
+                <Text style={[styles.chartSub, { color: colors.textSecondary }]}>{t("pf.records", { n: chartValues.length })}</Text>
                 <View style={{ marginTop: 10, alignItems: "center" }}>
                   <LineChart values={chartValues} width={width - 64} height={120} />
                 </View>
@@ -262,31 +304,31 @@ export default function PortfolioScreen() {
 
             {chartValues.length < 2 && (
               <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.chartTitle, { color: colors.text }]}>Değer Değişimi</Text>
+                <Text style={[styles.chartTitle, { color: colors.text }]}>{t("pf.valueChange")}</Text>
                 <Text style={[styles.chartSub, { color: colors.textSecondary }]}>
-                  Portföy değeriniz zaman içinde kaydedildikçe grafik burada oluşacak. Uygulamayı açık tuttukça grafik dolar.
+                  {t("pf.chartHint")}
                 </Text>
               </View>
             )}
 
             {allocation.total > 0 && (
               <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.chartTitle, { color: colors.text }]}>Varlık Dağılımı</Text>
+                <Text style={[styles.chartTitle, { color: colors.text }]}>{t("pf.allocation")}</Text>
                 <View style={styles.allocRow}>
                   <DonutChart
                     slices={[
-                      { label: "Altın", value: allocation.gold, color: colors.gold },
-                      { label: "Döviz", value: allocation.currency, color: colors.up },
+                      { label: t("pf.gold"), value: allocation.gold, color: colors.gold },
+                      { label: t("pf.currency"), value: allocation.currency, color: colors.up },
                     ]}
                     size={132}
                     strokeWidth={20}
-                    centerLabel="Dağılım"
+                    centerLabel={t("pf.allocation")}
                   />
                   <View style={styles.legend}>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: colors.gold }]} />
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.legendLabel, { color: colors.text }]}>Altın</Text>
+                        <Text style={[styles.legendLabel, { color: colors.text }]}>{t("pf.gold")}</Text>
                         <Text style={[styles.legendVal, { color: colors.textSecondary }]}>
                           %{formatNumber(allocation.goldPct, 1)} · {formatTL(allocation.gold, 0)}
                         </Text>
@@ -295,7 +337,7 @@ export default function PortfolioScreen() {
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: colors.up }]} />
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.legendLabel, { color: colors.text }]}>Döviz</Text>
+                        <Text style={[styles.legendLabel, { color: colors.text }]}>{t("pf.currency")}</Text>
                         <Text style={[styles.legendVal, { color: colors.textSecondary }]}>
                           %{formatNumber(allocation.currencyPct, 1)} · {formatTL(allocation.currency, 0)}
                         </Text>
@@ -312,55 +354,79 @@ export default function PortfolioScreen() {
 
       <Pressable testID="portfolio-add-btn" onPress={openAdd} style={[styles.fab, { backgroundColor: colors.gold, bottom: 16 }]}>
         <Ionicons name="add" size={22} color={colors.onGold} />
-        <Text style={[styles.fabTxt, { color: colors.onGold }]}>Varlık Ekle</Text>
+        <Text style={[styles.fabTxt, { color: colors.onGold }]}>{t("pf.addAsset")}</Text>
       </Pressable>
 
+      {/* Off-screen shareable card (captured to image) */}
+      <View style={styles.shareStage} pointerEvents="none">
+        <View ref={shareRef} collapsable={false} style={{ backgroundColor: "transparent" }}>
+          <ShareCard
+            data={{
+              totalValue: totals.value,
+              pl: totals.pl,
+              plPct: totals.plPct,
+              goldPct: allocation.goldPct,
+              currencyPct: allocation.currencyPct,
+              count: holdings.length,
+              date: new Date().toLocaleDateString(lang === "tr" ? "tr-TR" : lang === "de" ? "de-DE" : "en-GB"),
+              labels: {
+                title: t("pf.shareValue"),
+                pl: t("pf.pl"),
+                gold: t("pf.gold"),
+                currency: t("pf.currency"),
+                assets: t("pf.shareAssets"),
+              },
+            }}
+          />
+        </View>
+      </View>
+
       {/* Add / edit sheet */}
-      <Sheet visible={open} onClose={() => setOpen(false)} title={editing ? "Varlığı Düzenle" : "Varlık Ekle"}>
+      <Sheet visible={open} onClose={() => setOpen(false)} title={editing ? t("pf.editAsset") : t("pf.addAsset")}>
         <ScrollView keyboardShouldPersistTaps="handled">
-          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>Ürün</Text>
+          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>{t("pf.product")}</Text>
           <Pressable
             testID="portfolio-asset"
             onPress={() => setPickerOpen(true)}
             style={[styles.selectRow, { backgroundColor: colors.card2, borderColor: colors.border }]}
           >
-            <Text style={[styles.selectTxt, { color: colors.text }]}>{asset ? `${asset.name} (${asset.code})` : "Seçiniz"}</Text>
+            <Text style={[styles.selectTxt, { color: colors.text }]}>{asset ? `${asset.name} (${asset.code})` : t("common.select")}</Text>
             <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
           </Pressable>
 
-          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>Miktar (adet)</Text>
+          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>{t("pf.qty")}</Text>
           <TextInput
             testID="portfolio-qty"
             value={qty}
             onChangeText={setQty}
-            placeholder="Örn. 5"
+            placeholder="5"
             placeholderTextColor={colors.textTertiary}
             keyboardType="decimal-pad"
             style={[styles.input, { backgroundColor: colors.card2, borderColor: colors.border, color: colors.text }]}
           />
 
-          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>Alış Fiyatı (opsiyonel)</Text>
+          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>{t("pf.buyPriceOpt")}</Text>
           <TextInput
             testID="portfolio-buyprice"
             value={buyPrice}
             onChangeText={setBuyPrice}
-            placeholder={asset ? `Örn. ${formatNumber(asset.sell ?? 0, asset.decimals)}` : "Örn. 48,00"}
+            placeholder={asset ? formatNumber(asset.sell ?? 0, asset.decimals) : "48,00"}
             placeholderTextColor={colors.textTertiary}
             keyboardType="decimal-pad"
             style={[styles.input, { backgroundColor: colors.card2, borderColor: colors.border, color: colors.text }]}
           />
           <Text style={[styles.hint, { color: colors.textTertiary }]}>
-            Alış fiyatını girerseniz kâr/zararınızı da hesaplarız.
+            {t("pf.hint")}
           </Text>
 
           <Pressable testID="portfolio-save" onPress={submit} style={[styles.saveBtn, { backgroundColor: colors.gold }]}>
-            <Text style={{ color: colors.onGold, fontWeight: "800", fontSize: 15 }}>{editing ? "Güncelle" : "Ekle"}</Text>
+            <Text style={{ color: colors.onGold, fontWeight: "800", fontSize: 15 }}>{editing ? t("common.update") : t("common.add")}</Text>
           </Pressable>
         </ScrollView>
       </Sheet>
 
       {/* Asset picker */}
-      <Sheet visible={pickerOpen} onClose={() => setPickerOpen(false)} title="Ürün Seçin">
+      <Sheet visible={pickerOpen} onClose={() => setPickerOpen(false)} title={t("pf.product")}>
         <FlatList
           data={items}
           keyExtractor={(i) => i.code}
@@ -385,12 +451,12 @@ export default function PortfolioScreen() {
       </Sheet>
 
       {/* AI advice sheet */}
-      <Sheet visible={adviceOpen} onClose={() => setAdviceOpen(false)} title="AI Portföy Değerlendirmesi">
+      <Sheet visible={adviceOpen} onClose={() => setAdviceOpen(false)} title={t("pf.adviceTitle")}>
         <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ paddingBottom: 8 }}>
           {adviceLoading ? (
             <View style={{ paddingVertical: 30, alignItems: "center", gap: 12 }}>
               <ActivityIndicator color={colors.gold} />
-              <Text style={{ color: colors.textSecondary }}>Portföyünüz analiz ediliyor...</Text>
+              <Text style={{ color: colors.textSecondary }}>{t("pf.analyzing")}</Text>
             </View>
           ) : adviceErr ? (
             <Text style={{ color: colors.down, fontSize: 14, lineHeight: 21 }}>{adviceErr}</Text>
@@ -398,7 +464,7 @@ export default function PortfolioScreen() {
             <>
               <Text testID="portfolio-advice-text" style={{ color: colors.text, fontSize: 14.5, lineHeight: 22 }}>{advice}</Text>
               <Text style={{ color: colors.textTertiary, fontSize: 11.5, marginTop: 14, lineHeight: 16 }}>
-                Bu içerik yapay zeka tarafından üretildi ve yatırım tavsiyesi değildir.
+                {t("pf.aiDisclaimer")}
               </Text>
             </>
           )}
@@ -428,6 +494,9 @@ const styles = StyleSheet.create({
     marginTop: 18, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
   },
   adviceBtnTxt: { fontSize: 14, fontWeight: "800" },
+  sumBtnRow: { flexDirection: "row", gap: 10, alignItems: "stretch" },
+  shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 18, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12 },
+  shareStage: { position: "absolute", left: -1000, top: 0 },
   chartCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 14 },
   chartTitle: { fontSize: 15, fontWeight: "800", letterSpacing: -0.2 },
   chartSub: { fontSize: 12, marginTop: 2 },

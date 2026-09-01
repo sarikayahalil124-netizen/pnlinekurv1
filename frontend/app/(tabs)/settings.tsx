@@ -7,18 +7,20 @@ import { useTheme, ThemeMode } from "@/src/theme/ThemeContext";
 import { useSettings } from "@/src/context/SettingsContext";
 import { usePrices } from "@/src/context/PricesContext";
 import { formatTime } from "@/src/utils/format";
+import { useI18n, LANGUAGES } from "@/src/i18n";
 
 export default function SettingsScreen() {
   const { colors, mode, setMode } = useTheme();
   const { extraDecimals, update } = useSettings();
   const { lastSuccess } = usePrices();
+  const { t, lang, setLang } = useI18n();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const themeOptions: { label: string; value: ThemeMode; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { label: "Sistem", value: "system", icon: "phone-portrait-outline" },
-    { label: "Açık", value: "light", icon: "sunny-outline" },
-    { label: "Koyu", value: "dark", icon: "moon-outline" },
+    { label: t("set.system"), value: "system", icon: "phone-portrait-outline" },
+    { label: t("set.light"), value: "light", icon: "sunny-outline" },
+    { label: t("set.dark"), value: "dark", icon: "moon-outline" },
   ];
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -35,11 +37,11 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Ayarlar</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t("set.title")}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        <Section title="TEMA">
+        <Section title={t("set.theme")}>
           <View style={styles.themeRow}>
             {themeOptions.map((o) => {
               const active = mode === o.value;
@@ -58,12 +60,31 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <Section title="FİYAT GÖRÜNÜMÜ">
+        <Section title={t("set.language")}>
+          <View style={styles.themeRow}>
+            {LANGUAGES.map((o) => {
+              const active = lang === o.value;
+              return (
+                <Pressable
+                  key={o.value}
+                  testID={`lang-${o.value}`}
+                  onPress={() => setLang(o.value)}
+                  style={[styles.themeBtn, { borderColor: active ? colors.gold : colors.border, backgroundColor: active ? colors.goldSoft : colors.card2 }]}
+                >
+                  <Text style={{ fontSize: 22 }}>{o.flag}</Text>
+                  <Text style={[styles.themeTxt, { color: active ? colors.gold : colors.textSecondary, fontWeight: active ? "700" : "500" }]}>{o.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Section>
+
+        <Section title={t("set.priceView")}>
           <Row last>
             <Ionicons name="calculator-outline" size={20} color={colors.textSecondary} />
             <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, { color: colors.text }]}>Ek Ondalık Basamak</Text>
-              <Text style={[styles.rowSub, { color: colors.textSecondary }]}>Fiyatlarda bir fazla ondalık göster</Text>
+              <Text style={[styles.rowLabel, { color: colors.text }]}>{t("set.extraDecimals")}</Text>
+              <Text style={[styles.rowSub, { color: colors.textSecondary }]}>{t("set.extraDecimalsSub")}</Text>
             </View>
             <Switch
               testID="setting-decimals"
@@ -75,23 +96,23 @@ export default function SettingsScreen() {
           </Row>
         </Section>
 
-        <Section title="VERİ">
+        <Section title={t("set.data")}>
           <Row last>
             <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
             <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, { color: colors.text }]}>Son Veri Güncellemesi</Text>
+              <Text style={[styles.rowLabel, { color: colors.text }]}>{t("set.lastUpdate")}</Text>
             </View>
             <Text style={[styles.rowValue, { color: colors.textSecondary }]}>{formatTime(lastSuccess)}</Text>
           </Row>
         </Section>
 
-        <Section title="UYGULAMA">
+        <Section title={t("set.app")}>
           <Pressable testID="admin-entry" onPress={() => router.push("/admin/login")}>
             <Row>
               <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />
               <View style={styles.rowText}>
-                <Text style={[styles.rowLabel, { color: colors.text }]}>Yönetici Girişi</Text>
-                <Text style={[styles.rowSub, { color: colors.textSecondary }]}>Piyasa Yönetim Merkezi</Text>
+                <Text style={[styles.rowLabel, { color: colors.text }]}>{t("set.adminLogin")}</Text>
+                <Text style={[styles.rowSub, { color: colors.textSecondary }]}>{t("set.adminSub")}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
             </Row>
@@ -99,13 +120,13 @@ export default function SettingsScreen() {
           <Row last>
             <Ionicons name="information-circle-outline" size={20} color={colors.textSecondary} />
             <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, { color: colors.text }]}>ONLİNE KUR Hakkında</Text>
-              <Text style={[styles.rowSub, { color: colors.textSecondary }]}>Sürüm 1.0.0 · Altın & Döviz Piyasa Takibi</Text>
+              <Text style={[styles.rowLabel, { color: colors.text }]}>{t("set.about")}</Text>
+              <Text style={[styles.rowSub, { color: colors.textSecondary }]}>{t("set.aboutSub")}</Text>
             </View>
           </Row>
         </Section>
 
-        <Text style={[styles.footer, { color: colors.textTertiary }]}>ONLİNE KUR · Fiyatlar bilgilendirme amaçlıdır.</Text>
+        <Text style={[styles.footer, { color: colors.textTertiary }]}>{t("set.footer")}</Text>
       </ScrollView>
     </View>
   );

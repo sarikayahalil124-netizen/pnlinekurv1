@@ -98,3 +98,9 @@ Kullanıcı 3 sorun bildirdi:
 2. **Ses→metin başarısızdı** — Kök neden: whisper `transcribe`'a string yol veriliyordu ("Expected bytes/io/PathLike"). Düzeltme: açık dosya nesnesi (`open(path,'rb')`) geçildi. TTS→transcribe round-trip ile doğrulandı.
 3. **Sesli cevap** — `assistant.tsx` `send(text, autoSpeak)` eklendi; sesli soru sonrası `send(text, true)` çağrılıp asistan yanıtı otomatik TTS ile seslendiriliyor.
 Test: iteration_7 — backend 10/10, frontend akışları geçti, regresyon temiz.
+
+## Iteration 4 — 2026-06 (GitHub restore + chart/candlestick + AI Turkish TTS + i18n + portfolio share)
+- Restored full project from GitHub (emergent-project branch); installed deps; added EMERGENT_LLM_KEY/JWT/admin creds to backend/.env.
+- Fixed: chart ranges now differ (one-time 30-day historical seed for past days only + new /api/candles OHLC endpoint). Fixed: AI Turkish TTS spells numbers/%/TL professionally (clean_for_tts + turkish_int_to_words).
+- Added: candlestick chart with Line/Candle toggle + dashed moving-average comparison line (CandleChart). Added TR/EN/DE i18n (src/i18n, language in SettingsContext, all /ai/* accept lang). Added portfolio shareable card (ShareCard + react-native-view-shot + expo-sharing).
+- Verified by testing_agent: backend 15/15, frontend 100%. Admin: admin@onlinekur.com / OnlineKur2026!.

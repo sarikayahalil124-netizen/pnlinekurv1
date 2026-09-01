@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 8: All 4 requested features + bug fixes verified end-to-end. Backend 15/15 pytest cases pass (candles endpoint returns 40 buckets over 30d seed and differs between 1s/1A, gold GA works, TTS TR/EN/DE 200 OK with Turkish number-to-words active, AI chat responds in the requested lang for tr/en/de, prices integrity + admin login + admin/products auth + full alarms CRUD regress cleanly). Frontend on /product/USD renders Line & Candle charts with working chart-type toggle, tapping range chips 1s..1A refetches and mutates the SVG path (bug fixed), dashed golden average comparison line visible with 'Ortalama (karşılaştırma)' legend. /settings language selector switches ALL UI text and tab labels between TR/EN/DE (persists via SettingsContext). /portfolio add flow works (portfolio-asset -> pick USD -> qty -> save), portfolio-share-btn triggers view-shot capture on web without crashing (window.open is popup-blocked in headless Playwright, native Sharing.shareAsync path used on device — no exceptions in console). /assistant sends message, receives reply, and 'Sesli oku' calls POST /api/ai/tts + GET /api/ai/tts-audio (both 200).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Console warnings only (non-blocking): 'shadow*' style deprecated → use boxShadow; props.pointerEvents deprecated → use style.pointerEvents; transform-origin should be transformOrigin in ShareCard/LinearGradient tree. These are RN Web deprecation warnings and don't affect functionality."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter8_bugs_i18n.py",
+    "/app/test_reports/pytest/iter8.xml",
+    "/app/test_reports/pytest/iter8_reg.xml"
+  ],
+  "action_items": [
+    "(Non-blocking) Rename shadow* / pointerEvents / transform-origin usages to their new RN Web equivalents to silence warnings.",
+    "(Optional) server.py is now 1362 lines — consider splitting AI / market / admin into modules for maintainability."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew to 1362 lines (was 1180); consider modularization.",
+    "clean_for_tts Turkish number expansion is applied only when lang=='tr' — good; English/German pass raw numbers to the TTS voice which already handles them.",
+    "get_candles builds fixed 40 buckets over the actual data span, so 1s/1A candle arrays always differ — original 'same chart across ranges' bug is fully resolved server-side.",
+    "Portfolio share on web relies on window.open; if a user has popup-blocker on, silent failure. Consider fallback (download link, or embed image in modal) for web.",
+    "CandleChart returns null for <2 candles; product screen already gates on candles.length>=2 → good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter8_bugs_i18n.py (new — 15 tests: candles/prices/TTS/AI-lang/regressions)",
+    "/app/test_reports/iteration_8.json (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (chart toggle, range switch, lang TR/EN/DE, portfolio add+share, assistant TTS all verified)"},
+  "seed_data_creation": "None persistent. Tests created and immediately deleted: 1 alarm (device TEST_iter8_dev), 3 ai_messages device conversations (TEST_iter8_en/tr/de) — all cleaned via DELETE /api/alarms/{id} and DELETE /api/ai/messages. UI test added and left one USD holding in portfolio for the test device (localStorage-scoped, does not affect other clients).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regression suite: /app/backend/tests/test_iter8_bugs_i18n.py. Covers: (1) GET /api/candles/{code}?range=1s|6s|12s|1G|1H|1A — validates candle shape {o,h,l,c,ts}, ma same length as candles, 1s vs 1A differ, gold code GA works. (2) GET /api/prices integrity — changePct on majority, dayHigh/dayLow within ±30% of sell. (3) POST /api/ai/tts with lang tr/en/de returns 200 + /ai/tts-audio/{sha}.mp3 URL. (4) POST /api/ai/chat with lang en/tr/de — content-based heuristic checks. (5) Admin login returns access_token (not 'token'!), /api/admin/products needs Bearer, alarms CRUD requires 'name' field in body. Frontend testIDs verified: chart-type-line, chart-type-candle, range-1s..range-1A, lang-tr/en/de, portfolio-add-btn, portfolio-asset, portfolio-pick-USD, portfolio-qty, portfolio-buyprice, portfolio-save, portfolio-share-btn, portfolio-ai-advice-btn, ai-input, ai-send, ai-speak-{index}.",
+  "rca_of_issue": "BUG1 (chart identical across ranges) — server-side fixed by new /api/candles endpoint that time-buckets price_history into 40 candles bounded by the range-specific `since` filter, and by one-time seeding of 30 days of past hourly history (guarded via db.meta_flags{_id:'history_seeded'} so it never runs twice or clobbers live data). Frontend switched product screen to fetch this endpoint on every `range` change (useEffect depends on [code,range]), and CandleChart/LineChart both feed off candles.map(c=>c.c) so both toggle modes reflect the range change. Verified by measuring SVG path signature: len(before)=231, len(1A)=400, len(1s)=400, and 1s != 1A. BUG2 (Turkish TTS numbers unprofessional) — clean_for_tts now expands numbers matching \\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?|\\d+(?:,\\d+)? into Turkish words via turkish_int_to_words + 'virgül' + spelled digits ('48,2690' → 'kırk sekiz virgül iki altı dokuz sıfır'), plus % → 'yüzde', TL/₺ → 'lira', USD → 'dolar', EUR → 'euro'. Only applied when lang=='tr'. Round-trip TTS 200 verified for the exact test string. FEATURE3 (portfolio share card) — ShareCard component + react-native-view-shot captureRef + expo-sharing wired; on web falls back to window.open(uri) — verified click doesn't crash the screen. FEATURE4 (i18n) — src/i18n/translations.ts with tr/en/de dicts, useI18n() hook driven by SettingsContext.lang persisted in AsyncStorage; verified real-time swap of Ayarlar↔Settings↔Einstellungen and tab labels Portföy↔Portfolio↔Portfolio."
+}

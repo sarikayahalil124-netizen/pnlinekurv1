@@ -116,6 +116,24 @@ Test focus:
 - frontend: market default tab Döviz, column headers visible, view toggle switches to 2-col cards, no "Altınkaynak" text anywhere user-facing, product detail day high/low + chart, calculator converter mode, alarms create/toggle/delete via backend, admin login + Sırala screen loads.
 - Admin creds in /app/memory/test_credentials.md
 
+## Iteration 4 — 2026-06 (Feature batch: candlestick chart + chart range fix + AI Turkish TTS numbers + TR/EN/DE i18n + portfolio share card)
+
+Main agent implemented (GitHub project restored into env first; deps installed; EMERGENT_LLM_KEY/JWT/admin creds added to backend/.env):
+
+BUG FIXES:
+1. Chart "line stayed the same across ranges" — root cause was a fresh DB with only minutes of history so every range showed the same window. Backend now (a) seeds a one-time ~30-day historical price walk into price_history for PAST days only (ts < today 00:00 IST) via seed_history_if_needed() called after first poll (guarded by db.meta_flags history_seeded so it runs once, does NOT touch today's real data so daily %/high-low stay live), and (b) new endpoint GET /api/candles/{code}?range= aggregates price_history into ~40 OHLC candles + a moving-average line. Different ranges (1s,6s,12s,1G,1H,1A) now return visibly different candle sets.
+2. AI Turkish TTS mispronouncing numbers — clean_for_tts(text, lang) now, for lang=tr, spells Turkish-formatted numbers into words (turkish_int_to_words + decimal digit spelling), and expands %→"yüzde", TL/₺→"lira", USD→"dolar", EUR→"euro". Verified: "48,2690 TL"→"kırk sekiz virgül iki altı dokuz sıfır lira", "%1,24"→"yüzde bir virgül iki dört". EN/DE text left untouched.
+
+FEATURES:
+3. Candlestick chart: new CandleChart component (react-native-svg) with green/red bodies+wicks and a dashed gold moving-average "comparison" line. Product detail (/product/[code]) has a Line/Candle toggle (testID chart-type-line / chart-type-candle); Line view also overlays the dashed MA compare line. Uses api.getCandles.
+4. TR/EN/DE i18n: src/i18n (translations.ts + useI18n hook), language stored in SettingsContext (language field). Settings screen has a LANGUAGE selector (testID lang-tr/lang-en/lang-de) with flags. All main screens translated: tab labels, market, favorites, calculator, alarms, settings, product detail, assistant, portfolio. AI endpoints (/ai/chat, /ai/commentary, /ai/portfolio-advice, /ai/tts) accept a lang param and reply/speak in the selected language.
+5. Portfolio share card: new ShareCard component (branded gradient card with total value, P/L chip, gold/currency allocation bar). Portfolio screen "Paylaş/Share" button (testID portfolio-share-btn) captures it via react-native-view-shot captureRef and shares via expo-sharing (native); on web it opens the image. Rendered off-screen via shareRef.
+
+Test focus (iteration 4):
+- backend: GET /api/candles/USD?range=1G and ?range=1A return {candles:[...], ma:[...]}, 1A has ~40 candles from seeded history and differs from 1s; POST /api/ai/tts {text,lang:"tr"} returns {url} 200 and {lang:"en"} works; POST /api/ai/chat {deviceId,message,lang:"en"} replies in English, lang:"tr" in Turkish; existing /api/prices changePct + alarms CRUD still fine.
+- frontend: product detail Line/Candle toggle both render, ranges change the chart, dashed average line visible; Settings language tr/en/de switches all UI text (verified EN); portfolio add asset then Share button captures+shares a card (native; web opens image); AI assistant honors language.
+- Admin creds in /app/memory/test_credentials.md (admin@onlinekur.com / OnlineKur2026!).
+
 ## Iteration 3 — 2026-06 (Feature batch: daily % change + favorites summary widget + alarm history)
 
 Main agent implemented:

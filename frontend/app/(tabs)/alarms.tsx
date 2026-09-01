@@ -9,12 +9,14 @@ import { Sheet } from "@/src/components/Sheet";
 import { SegmentedControl } from "@/src/components/SegmentedControl";
 import { requestPushForAlarms } from "@/src/utils/push";
 import { formatNumber, formatTime, formatDateTime, parseTR } from "@/src/utils/format";
+import { useI18n } from "@/src/i18n";
 
 export default function AlarmsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { items, byCode } = usePrices();
   const { alarms, history, add, remove, toggle } = useAlarms();
+  const { t } = useI18n();
 
   const [tab, setTab] = useState<"active" | "history">("active");
   const [open, setOpen] = useState(false);
@@ -54,13 +56,13 @@ export default function AlarmsScreen() {
             {triggered && (
               <View style={[styles.trigTag, { backgroundColor: colors.gold + "22" }]}>
                 <Ionicons name="notifications" size={12} color={colors.gold} />
-                <Text style={[styles.trigTxt, { color: colors.gold }]}>Tetiklendi</Text>
+                <Text style={[styles.trigTxt, { color: colors.gold }]}>{t("alarm.triggered")}</Text>
               </View>
             )}
           </View>
           <Text style={[styles.cardCond, { color: colors.textSecondary }]}>
-            {a.basis === "buy" ? "Alış" : "Satış"} {a.condition} {formatNumber(a.target, cur?.decimals ?? 2)}
-            {price != null && <Text style={{ color: colors.textTertiary }}>  ·  Şu an {formatNumber(price, cur?.decimals ?? 2)}</Text>}
+            {a.basis === "buy" ? t("product.buy") : t("product.sell")} {a.condition} {formatNumber(a.target, cur?.decimals ?? 2)}
+            {price != null && <Text style={{ color: colors.textTertiary }}>  ·  {t("common.now")} {formatNumber(price, cur?.decimals ?? 2)}</Text>}
           </Text>
           {triggered && <Text style={[styles.trigTime, { color: colors.textTertiary }]}>{formatTime(a.triggeredAt)}</Text>}
         </View>
@@ -88,7 +90,7 @@ export default function AlarmsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.cardName, { color: colors.text }]}>{h.name}</Text>
           <Text style={[styles.cardCond, { color: colors.textSecondary }]}>
-            {h.basis === "buy" ? "Alış" : "Satış"} {h.condition} {formatNumber(h.target, h.decimals)}
+            {h.basis === "buy" ? t("product.buy") : t("product.sell")} {h.condition} {formatNumber(h.target, h.decimals)}
             <Text style={{ color: dirColor }}>  ·  {formatNumber(h.price, h.decimals)}</Text>
           </Text>
           <Text style={[styles.trigTime, { color: colors.textTertiary }]}>{formatDateTime(h.triggeredAt)}</Text>
@@ -100,15 +102,15 @@ export default function AlarmsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Alarmlar</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Fiyat hedefleriniz</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t("alarm.title")}</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t("alarm.subtitle")}</Text>
         <View style={{ marginTop: 12 }}>
           <SegmentedControl
             value={tab}
             onChange={(v) => setTab(v as "active" | "history")}
             options={[
-              { label: "Aktif", value: "active" },
-              { label: `Geçmiş${history.length ? ` (${history.length})` : ""}`, value: "history" },
+              { label: t("alarm.active"), value: "active" },
+              { label: `${t("alarm.history")}${history.length ? ` (${history.length})` : ""}`, value: "history" },
             ]}
           />
         </View>
@@ -118,8 +120,8 @@ export default function AlarmsScreen() {
         history.length === 0 ? (
           <View style={styles.center}>
             <Ionicons name="time-outline" size={48} color={colors.textTertiary} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>Geçmiş kaydı yok</Text>
-            <Text style={[styles.emptyTxt, { color: colors.textSecondary }]}>Bir alarmınız hedefe ulaştığında burada tarih ve fiyatıyla listelenir.</Text>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>{t("alarm.emptyHistTitle")}</Text>
+            <Text style={[styles.emptyTxt, { color: colors.textSecondary }]}>{t("alarm.emptyHistTxt")}</Text>
           </View>
         ) : (
           <FlatList
@@ -132,8 +134,8 @@ export default function AlarmsScreen() {
       ) : alarms.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="notifications-outline" size={48} color={colors.textTertiary} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Aktif alarmınız bulunmuyor</Text>
-          <Text style={[styles.emptyTxt, { color: colors.textSecondary }]}>Bir ürün için hedef fiyat belirleyin; fiyat hedefe ulaşınca telefonunuza bildirim gönderilir.</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>{t("alarm.emptyActiveTitle")}</Text>
+          <Text style={[styles.emptyTxt, { color: colors.textSecondary }]}>{t("alarm.emptyActiveTxt")}</Text>
         </View>
       ) : (
         <FlatList
@@ -151,40 +153,40 @@ export default function AlarmsScreen() {
           style={[styles.fab, { backgroundColor: colors.gold, bottom: 16 }]}
         >
           <Ionicons name="add" size={22} color={colors.onGold} />
-          <Text style={[styles.fabTxt, { color: colors.onGold }]}>Yeni Alarm Ekle</Text>
+          <Text style={[styles.fabTxt, { color: colors.onGold }]}>{t("alarm.addBtn")}</Text>
         </Pressable>
       )}
 
       {/* Create sheet */}
-      <Sheet visible={open} onClose={() => setOpen(false)} title="Yeni Alarm">
+      <Sheet visible={open} onClose={() => setOpen(false)} title={t("alarm.new")}>
         <ScrollView keyboardShouldPersistTaps="handled">
-          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>Ürün</Text>
+          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>{t("alarm.product")}</Text>
           <Pressable testID="alarm-asset" onPress={() => setPickerOpen(true)} style={[styles.selectRow, { backgroundColor: colors.card2, borderColor: colors.border }]}>
-            <Text style={[styles.selectTxt, { color: colors.text }]}>{asset ? `${asset.name} (${asset.code})` : "Seçiniz"}</Text>
+            <Text style={[styles.selectTxt, { color: colors.text }]}>{asset ? `${asset.name} (${asset.code})` : t("common.select")}</Text>
             <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
           </Pressable>
 
-          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>Fiyat Türü</Text>
+          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>{t("alarm.priceType")}</Text>
           <View style={[styles.toggleRow, { backgroundColor: colors.card2, borderColor: colors.border }]}>
             {(["buy", "sell"] as const).map((b) => (
               <Pressable key={b} testID={`alarm-basis-${b}`} onPress={() => setBasis(b)} style={[styles.toggleBtn, basis === b && { backgroundColor: colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}>
-                <Text style={{ color: basis === b ? colors.text : colors.textSecondary, fontWeight: basis === b ? "700" : "500" }}>{b === "buy" ? "Alış" : "Satış"}</Text>
+                <Text style={{ color: basis === b ? colors.text : colors.textSecondary, fontWeight: basis === b ? "700" : "500" }}>{b === "buy" ? t("product.buy") : t("product.sell")}</Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>Koşul</Text>
+          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>{t("alarm.condition")}</Text>
           <View style={[styles.toggleRow, { backgroundColor: colors.card2, borderColor: colors.border }]}>
             {([">", "<"] as const).map((c) => (
               <Pressable key={c} testID={`alarm-cond-${c === ">" ? "gt" : "lt"}`} onPress={() => setCondition(c)} style={[styles.toggleBtn, condition === c && { backgroundColor: colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}>
                 <Text style={{ color: condition === c ? colors.text : colors.textSecondary, fontWeight: condition === c ? "700" : "500" }}>
-                  {c === ">" ? "Üstüne çıkınca" : "Altına inince"}
+                  {c === ">" ? t("alarm.above") : t("alarm.below")}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>Hedef Fiyat</Text>
+          <Text style={[styles.fLabel, { color: colors.textSecondary }]}>{t("alarm.target")}</Text>
           <TextInput
             testID="alarm-target"
             value={target}
@@ -196,19 +198,19 @@ export default function AlarmsScreen() {
           />
 
           <Pressable testID="alarm-save" onPress={submit} style={[styles.saveBtn, { backgroundColor: colors.gold, opacity: saving ? 0.7 : 1 }]}>
-            <Text style={{ color: colors.onGold, fontWeight: "800", fontSize: 15 }}>Alarm Oluştur</Text>
+            <Text style={{ color: colors.onGold, fontWeight: "800", fontSize: 15 }}>{t("alarm.create")}</Text>
           </Pressable>
           <View style={styles.noteRow}>
             <Ionicons name="notifications-outline" size={14} color={colors.textTertiary} />
             <Text style={[styles.noteTxt, { color: colors.textTertiary }]}>
-              Hedefe ulaşınca telefonunuza anlık bildirim gönderilir. Bunun için bildirim izni istenir.
+              {t("alarm.note")}
             </Text>
           </View>
         </ScrollView>
       </Sheet>
 
       {/* Asset picker */}
-      <Sheet visible={pickerOpen} onClose={() => setPickerOpen(false)} title="Ürün Seçin">
+      <Sheet visible={pickerOpen} onClose={() => setPickerOpen(false)} title={t("alarm.product")}>
         <FlatList
           data={items}
           keyExtractor={(i) => i.code}

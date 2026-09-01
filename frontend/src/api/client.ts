@@ -54,6 +54,8 @@ export const api = {
   getPrices: (type = "all"): Promise<PricesResponse> => req(`/prices?type=${type}`),
   getPrice: (code: string) => req(`/prices/${encodeURIComponent(code)}`),
   getHistory: (code: string, range: string) => req(`/history/${encodeURIComponent(code)}?range=${range}`),
+  getCandles: (code: string, range: string): Promise<{ code: string; range: string; candles: { o: number; h: number; l: number; c: number; ts: string }[]; ma: number[] }> =>
+    req(`/candles/${encodeURIComponent(code)}?range=${range}`),
   getMeta: () => req(`/meta`),
 
   // push + alarms
@@ -69,13 +71,14 @@ export const api = {
   // AI assistant
   aiMessages: (deviceId: string) => req(`/ai/messages?deviceId=${encodeURIComponent(deviceId)}`),
   aiClear: (deviceId: string) => req(`/ai/messages?deviceId=${encodeURIComponent(deviceId)}`, { method: "DELETE" }),
-  aiChat: (deviceId: string, message: string): Promise<{ reply: string; alarmCreated?: boolean; alarm?: any }> =>
-    req(`/ai/chat`, { method: "POST", body: JSON.stringify({ deviceId, message }) }),
-  aiCommentary: (): Promise<{ commentary: string; at: string }> => req(`/ai/commentary`, { method: "POST" }),
-  aiPortfolioAdvice: (holdings: any[]): Promise<{ advice: string; totalValue: number; totalCost: number }> =>
-    req(`/ai/portfolio-advice`, { method: "POST", body: JSON.stringify({ holdings }) }),
-  async aiTts(text: string): Promise<{ url: string }> {
-    const r = await req(`/ai/tts`, { method: "POST", body: JSON.stringify({ text }) });
+  aiChat: (deviceId: string, message: string, lang = "tr"): Promise<{ reply: string; alarmCreated?: boolean; alarm?: any }> =>
+    req(`/ai/chat`, { method: "POST", body: JSON.stringify({ deviceId, message, lang }) }),
+  aiCommentary: (lang = "tr"): Promise<{ commentary: string; at: string }> =>
+    req(`/ai/commentary`, { method: "POST", body: JSON.stringify({ lang }) }),
+  aiPortfolioAdvice: (holdings: any[], lang = "tr"): Promise<{ advice: string; totalValue: number; totalCost: number }> =>
+    req(`/ai/portfolio-advice`, { method: "POST", body: JSON.stringify({ holdings, lang }) }),
+  async aiTts(text: string, lang = "tr"): Promise<{ url: string }> {
+    const r = await req(`/ai/tts`, { method: "POST", body: JSON.stringify({ text, lang }) });
     return { url: `${BASE}${r.url}` };
   },
   async aiTranscribe(fileUri: string, mime: string, name: string): Promise<{ text: string }> {
