@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, RefreshControl, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { setAudioModeAsync, createAudioPlayer } from "expo-audio";
 import { useTheme } from "@/src/theme/ThemeContext";
 import { usePrices } from "@/src/context/PricesContext";
 import { useSettings } from "@/src/context/SettingsContext";
@@ -11,8 +12,12 @@ import { PriceCard } from "@/src/components/PriceCard";
 import { ColumnsHeader } from "@/src/components/ColumnsHeader";
 import { FavoritesSummary } from "@/src/components/FavoritesSummary";
 import { SegmentedControl } from "@/src/components/SegmentedControl";
+import { MarkdownLite } from "@/src/components/MarkdownLite";
+import { api } from "@/src/api/client";
 import { formatTime } from "@/src/utils/format";
 import { useI18n } from "@/src/i18n";
+
+const summaryPlayer = createAudioPlayer();
 
 export default function MarketScreen() {
   const { colors } = useTheme();
@@ -20,7 +25,40 @@ export default function MarketScreen() {
   const router = useRouter();
   const { items, feedStatus, lastSuccess, loading, error, refresh } = usePrices();
   const { marketView, update } = useSettings();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+
+  const [summaryState, setSummaryState] = useState<"idle" | "loading" | "playing">("idle");
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sub = summaryPlayer.addListener("playbackStatusUpdate", (s: any) => {
+      if (s?.didJustFinish) setSummaryState("idle");
+    });
+    return () => {
+      sub?.remove?.();
+      try { summaryPlayer.pause(); } catch {}
+    };
+  }, []);
+
+  const playDailySummary = useCallback(async () => {
+    if (summaryState === "playing") {
+      try { summaryPlayer.pause(); } catch {}
+      setSummaryState("idle");
+      return;
+    }
+    setSummaryState("loading");
+    try {
+      const c = await api.aiCommentary(lang);
+      setSummaryText(c.commentary);
+      const { url } = await api.aiTts(c.commentary, lang);
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      summaryPlayer.replace({ uri: url });
+      summaryPlayer.play();
+      setSummaryState("playing");
+    } catch {
+      setSummaryState("idle");
+    }
+  }, [summaryState, lang]);
 
   const [filter, setFilter] = useState("currency");
   const [search, setSearch] = useState("");
@@ -119,6 +157,31 @@ export default function MarketScreen() {
 
       <FavoritesSummary />
 
+      <View style={styles.summaryWrap}>
+        <Pressable
+          testID="daily-summary-btn"
+          onPress={playDailySummary}
+          style={[styles.summaryBtn, { backgroundColor: summaryState === "playing" ? colors.gold : colors.card, borderColor: summaryState === "playing" ? colors.gold : colors.border }]}
+        >
+          {summaryState === "loading" ? (
+            <ActivityIndicator size="small" color={colors.gold} />
+          ) : (
+            <View style={[styles.summaryIcon, { backgroundColor: summaryState === "playing" ? colors.onGold + "22" : colors.goldSoft }]}>
+              <Ionicons name={summaryState === "playing" ? "stop" : "volume-high"} size={16} color={summaryState === "playing" ? colors.onGold : colors.gold} />
+            </View>
+          )}
+          <Text style={[styles.summaryTxt, { color: summaryState === "playing" ? colors.onGold : colors.text }]}>
+            {summaryState === "loading" ? t("market.summaryLoading") : summaryState === "playing" ? t("market.summaryPlaying") : t("market.dailySummary")}
+          </Text>
+          {summaryState === "idle" && <Ionicons name="sparkles" size={15} color={colors.gold} style={{ marginLeft: "auto" }} />}
+        </Pressable>
+        {summaryText && summaryState !== "idle" && (
+          <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <MarkdownLite text={summaryText} color={colors.text} accent={colors.gold} muted={colors.textSecondary} size={13.5} />
+          </View>
+        )}
+      </View>
+
       {loading && items.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.gold} size="large" />
@@ -187,6 +250,11 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
   viewBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: StyleSheet.hairlineWidth },
   segWrap: { marginTop: 12 },
+  summaryWrap: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
+  summaryBtn: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  summaryIcon: { width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  summaryTxt: { fontSize: 14, fontWeight: "700" },
+  summaryCard: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 12 },
   centerTxt: { fontSize: 14, textAlign: "center" },
   retryBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginTop: 4 },

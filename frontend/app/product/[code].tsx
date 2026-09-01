@@ -9,7 +9,10 @@ import { useSettings } from "@/src/context/SettingsContext";
 import { api } from "@/src/api/client";
 import { LineChart } from "@/src/components/LineChart";
 import { CandleChart, Candle } from "@/src/components/CandleChart";
+import { CompareChart } from "@/src/components/CompareChart";
 import { StatusPill } from "@/src/components/StatusPill";
+import { Sheet } from "@/src/components/Sheet";
+import { usePrices } from "@/src/context/PricesContext";
 import { formatNumber, providerTimeOnly } from "@/src/utils/format";
 import { useI18n } from "@/src/i18n";
 
@@ -31,6 +34,7 @@ export default function ProductDetail() {
   const { isFavorite, toggle } = useFavorites();
   const { extraDecimals } = useSettings();
   const { t } = useI18n();
+  const { items } = usePrices();
 
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -40,6 +44,9 @@ export default function ProductDetail() {
   const [ma, setMa] = useState<number[]>([]);
   const [chartType, setChartType] = useState<"line" | "candle">("line");
   const [chartLoading, setChartLoading] = useState(false);
+  const [compareCode, setCompareCode] = useState<string | null>(null);
+  const [compareCandles, setCompareCandles] = useState<Candle[]>([]);
+  const [comparePickerOpen, setComparePickerOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -74,6 +81,30 @@ export default function ProductDetail() {
       }
     })();
   }, [code, range]);
+
+  useEffect(() => {
+    if (!compareCode) {
+      setCompareCandles([]);
+      return;
+    }
+    (async () => {
+      try {
+        const h = await api.getCandles(compareCode, range);
+        setCompareCandles(h.candles || []);
+      } catch {
+        setCompareCandles([]);
+      }
+    })();
+  }, [compareCode, range]);
+
+  const compareItem = compareCode ? items.find((i) => i.code === compareCode) : null;
+  const COMP_A = "#E7B94B";
+  const COMP_B = "#3B82F6";
+  const pctOf = (arr: Candle[]) => {
+    if (arr.length < 2) return null;
+    const base = arr[0].c || 1;
+    return ((arr[arr.length - 1].c / base - 1) * 100);
+  };
 
   const fav = isFavorite(String(code));
 
@@ -174,24 +205,38 @@ export default function ProductDetail() {
         {/* Chart */}
         <View style={styles.chartHead}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>{t("product.chart")}</Text>
-          <View style={[styles.typeToggle, { backgroundColor: colors.card2, borderColor: colors.border }]}>
-            {(["line", "candle"] as const).map((tp) => (
-              <Pressable
-                key={tp}
-                testID={`chart-type-${tp}`}
-                onPress={() => setChartType(tp)}
-                style={[styles.typeBtn, chartType === tp && { backgroundColor: colors.gold }]}
-              >
-                <Ionicons
-                  name={tp === "line" ? "pulse" : "stats-chart"}
-                  size={13}
-                  color={chartType === tp ? colors.onGold : colors.textSecondary}
-                />
-                <Text style={{ color: chartType === tp ? colors.onGold : colors.textSecondary, fontWeight: "700", fontSize: 11.5 }}>
-                  {tp === "line" ? t("product.line") : t("product.candle")}
-                </Text>
-              </Pressable>
-            ))}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 24 }}>
+            <Pressable
+              testID="chart-compare-btn"
+              onPress={() => (compareCode ? setCompareCode(null) : setComparePickerOpen(true))}
+              style={[styles.compareBtn, { backgroundColor: compareCode ? colors.gold : colors.card2, borderColor: colors.border }]}
+            >
+              <Ionicons name={compareCode ? "close" : "git-compare"} size={13} color={compareCode ? colors.onGold : colors.textSecondary} />
+              <Text style={{ color: compareCode ? colors.onGold : colors.textSecondary, fontWeight: "700", fontSize: 11.5 }}>
+                {compareCode ? t("product.compareClose") : t("product.compare")}
+              </Text>
+            </Pressable>
+            {!compareCode && (
+              <View style={[styles.typeToggle, { backgroundColor: colors.card2, borderColor: colors.border, marginTop: 0 }]}>
+                {(["line", "candle"] as const).map((tp) => (
+                  <Pressable
+                    key={tp}
+                    testID={`chart-type-${tp}`}
+                    onPress={() => setChartType(tp)}
+                    style={[styles.typeBtn, chartType === tp && { backgroundColor: colors.gold }]}
+                  >
+                    <Ionicons
+                      name={tp === "line" ? "pulse" : "stats-chart"}
+                      size={13}
+                      color={chartType === tp ? colors.onGold : colors.textSecondary}
+                    />
+                    <Text style={{ color: chartType === tp ? colors.onGold : colors.textSecondary, fontWeight: "700", fontSize: 11.5 }}>
+                      {tp === "line" ? t("product.line") : t("product.candle")}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </View>
         </View>
         <View style={styles.rangeRow}>
@@ -211,6 +256,41 @@ export default function ProductDetail() {
             <View style={styles.chartEmpty}>
               <ActivityIndicator color={colors.gold} />
             </View>
+          ) : compareCode ? (
+            compareCandles.length >= 2 && candles.length >= 2 ? (
+              <>
+                <CompareChart
+                  seriesA={candles.map((c) => c.c)}
+                  seriesB={compareCandles.map((c) => c.c)}
+                  colorA={COMP_A}
+                  colorB={COMP_B}
+                  width={width - 64}
+                  height={160}
+                />
+                <View style={styles.cmpLegend}>
+                  <View style={styles.cmpRow}>
+                    <View style={[styles.legendDash, { backgroundColor: COMP_A }]} />
+                    <Text style={[styles.cmpName, { color: colors.text }]} numberOfLines={1}>{detail.name}</Text>
+                    <Text style={[styles.cmpPct, { color: (pctOf(candles) ?? 0) >= 0 ? colors.up : colors.down }]}>
+                      {(pctOf(candles) ?? 0) >= 0 ? "+" : ""}%{formatNumber(Math.abs(pctOf(candles) ?? 0), 2)}
+                    </Text>
+                  </View>
+                  <View style={styles.cmpRow}>
+                    <View style={[styles.legendDash, { backgroundColor: COMP_B }]} />
+                    <Text style={[styles.cmpName, { color: colors.text }]} numberOfLines={1}>{compareItem?.name || compareCode}</Text>
+                    <Text style={[styles.cmpPct, { color: (pctOf(compareCandles) ?? 0) >= 0 ? colors.up : colors.down }]}>
+                      {(pctOf(compareCandles) ?? 0) >= 0 ? "+" : ""}%{formatNumber(Math.abs(pctOf(compareCandles) ?? 0), 2)}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.chartEmptyTxt, { color: colors.textTertiary, marginTop: 8, paddingHorizontal: 0 }]}>{t("product.compareHint")}</Text>
+              </>
+            ) : (
+              <View style={styles.chartEmpty}>
+                <Ionicons name="analytics-outline" size={32} color={colors.textTertiary} />
+                <Text style={[styles.chartEmptyTxt, { color: colors.textSecondary }]}>{t("product.noHistory")}</Text>
+              </View>
+            )
           ) : candles.length >= 2 ? (
             <>
               {chartType === "candle" ? (
@@ -252,6 +332,29 @@ export default function ProductDetail() {
           <Stat label={t("product.spread")} value={formatNumber(detail.sell - detail.buy, dec)} accent={colors.gold} />
         </View>
       </ScrollView>
+
+      {/* Comparison product picker */}
+      <Sheet visible={comparePickerOpen} onClose={() => setComparePickerOpen(false)} title={t("product.comparePick")}>
+        <ScrollView style={{ maxHeight: 440 }} keyboardShouldPersistTaps="handled">
+          {items.filter((i) => i.code !== code).map((item) => (
+            <Pressable
+              key={item.code}
+              testID={`compare-pick-${item.code}`}
+              onPress={() => {
+                setCompareCode(item.code);
+                setComparePickerOpen(false);
+              }}
+              style={[styles.pickRow, { borderBottomColor: colors.border }]}
+            >
+              <View>
+                <Text style={[styles.pickName, { color: colors.text }]}>{item.name}</Text>
+                <Text style={[styles.pickCode, { color: colors.textSecondary }]}>{item.code}</Text>
+              </View>
+              {item.code === compareCode && <Ionicons name="checkmark" size={20} color={colors.gold} />}
+            </Pressable>
+          ))}
+        </ScrollView>
+      </Sheet>
     </View>
   );
 }
@@ -288,6 +391,14 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   legendDash: { width: 16, height: 3, borderRadius: 2 },
   legendTxt: { fontSize: 11.5, fontWeight: "600" },
+  compareBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth },
+  cmpLegend: { marginTop: 12, gap: 8 },
+  cmpRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  cmpName: { fontSize: 13, fontWeight: "700", flexShrink: 1 },
+  cmpPct: { fontSize: 12.5, fontWeight: "800", fontVariant: ["tabular-nums"], marginLeft: "auto" },
+  pickRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  pickName: { fontSize: 15, fontWeight: "600" },
+  pickCode: { fontSize: 12, marginTop: 2 },
   rangeRow: { flexDirection: "row", gap: 6, marginBottom: 10 },
   rangeBtn: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth },
   chartCard: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, minHeight: 180, justifyContent: "center" },

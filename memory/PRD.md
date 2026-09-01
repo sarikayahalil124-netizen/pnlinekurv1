@@ -104,3 +104,10 @@ Test: iteration_7 — backend 10/10, frontend akışları geçti, regresyon temi
 - Fixed: chart ranges now differ (one-time 30-day historical seed for past days only + new /api/candles OHLC endpoint). Fixed: AI Turkish TTS spells numbers/%/TL professionally (clean_for_tts + turkish_int_to_words).
 - Added: candlestick chart with Line/Candle toggle + dashed moving-average comparison line (CandleChart). Added TR/EN/DE i18n (src/i18n, language in SettingsContext, all /ai/* accept lang). Added portfolio shareable card (ShareCard + react-native-view-shot + expo-sharing).
 - Verified by testing_agent: backend 15/15, frontend 100%. Admin: admin@onlinekur.com / OnlineKur2026!.
+
+## Iteration 5 — 2026-06 (Voice daily summary + comparison mode + currency name cleanup + natural TTS decimals + AI markdown template)
+- Currency display names shortened via NAME_OVERRIDES (USD→Dolar, EUR→Euro, GBP→Sterlin...).
+- TTS decimals now read naturally as 2dp whole numbers ("48,2690"→"kırk sekiz virgül yirmi altı") instead of digit-by-digit; hundreds spaced ("yedi yüz").
+- AI persona outputs structured markdown; new MarkdownLite component renders bold headings, gold bullets, bold values in assistant + portfolio advice + daily summary.
+- Market screen: "Sesli Günün Özeti" button (testID daily-summary-btn) fetches /ai/commentary(lang) + plays /ai/tts(lang), shows formatted commentary card; stop-on-tap.
+- Product detail: comparison mode (testID chart-compare-btn + compare-pick-{code}) overlays two products on one CompareChart normalized to % change from start, with legend + per-series % and zero baseline.
