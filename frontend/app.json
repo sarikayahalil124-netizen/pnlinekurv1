@@ -48,7 +48,16 @@
           "backgroundColor": "#000000"
         }
       ],
-      "expo-audio"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "buildFeatures": {
+              "buildConfig": true
+            }
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
