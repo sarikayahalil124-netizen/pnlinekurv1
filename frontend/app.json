@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.premiumkur.gt9vr0",
+      "bundleIdentifier": "com.onlinekur.app",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Sesle soru sormak için mikrofon kullanılır"
       }
@@ -22,7 +22,7 @@
       },
       "edgeToEdgeEnabled": true,
       "googleServicesFile": "./google-services.json",
-      "package": "com.emergent.premiumkur.gt9vr0",
+      "package": "com.onlinekur.app",
       "permissions": ["RECORD_AUDIO"]
     },
     "web": {
