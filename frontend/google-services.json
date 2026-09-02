@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:847492920963:android:ddad4b781dca4ee22b0db6",
+        "android_client_info": {
+          "package_name": "com.onlinekur.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBO_Do8TrcDOnPjL_sNaqsbBJSORSxqXMQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:847492920963:android:954acb2d7a2b3b852b0db6",
         "android_client_info": {
           "package_name": "online.kur"
